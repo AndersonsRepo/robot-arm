@@ -54,6 +54,7 @@ reviews:
       - "firmware/**"
       - "sim/**"
       - "config/**"
+      - "urdf/**"
     message: |
       Please include:
       - What scenarios you tested (workspace edges, singularities, saturation).
