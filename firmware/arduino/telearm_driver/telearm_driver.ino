@@ -1,11 +1,26 @@
 /*
+ * Telearm Arduino Driver
+ * 
+ * This firmware controls 5 hobby servos for the Telearm robot.
+ * Configuration parameters should match config/pins.yaml in the Python package.
+ * 
+ * Protocol:
+ * - Send: "M,<joint_index>,<angle_radians>\n"
+ * - Receive: "OK" or "ERR"
+ * 
+ * Hardware configuration (from config/pins.yaml):
+ * - Pins: [3, 5, 6, 9, 10]
+ * - Baud rate: 115200
+ * - PWM range: 500-2500 microseconds
+ */
+
 #include <Servo.h>
 
 constexpr int NUM_JOINTS = 5;
 int PINS[NUM_JOINTS] = {3, 5, 6, 9, 10};
 Servo servos[NUM_JOINTS];
 
-// Tune these per joint/servo
+// Servo configuration - match config/pins.yaml
 int   us_min[NUM_JOINTS] = {500, 500, 500, 500, 500};
 int   us_max[NUM_JOINTS] = {2500,2500,2500,2500,2500};
 float rad_min[NUM_JOINTS]= {-3.1416, -1.5708, -2.3562, -2.3562, -3.1416};
@@ -35,8 +50,7 @@ void setup(){
 void loop(){
   while (Serial.available()){
     char c = (char)Serial.read();
-    if (c == '
-'){
+    if (c == '\n'){
       if (buf.length() > 0 && buf.charAt(0) == 'M'){
         int p1 = buf.indexOf(',');
         int p2 = buf.indexOf(',', p1+1);
@@ -52,10 +66,8 @@ void loop(){
         }
       }
       buf = "";
-    } else if (c != '
-'){
+    } else if (c != '\r'){
       buf += c;
     }
   }
 }
-*/

@@ -2,7 +2,7 @@ from setuptools import setup
 package_name = 'telearm_ros2'
 setup(
   name=package_name,
-  version='0.0.1',
+  version='0.1.0',
   packages=[package_name],
   data_files=[
     ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
@@ -11,7 +11,10 @@ setup(
     ('share/' + package_name + '/urdf', ['urdf/telearm.urdf']),
     ('share/' + package_name + '/rviz', ['rviz/telearm.rviz']),
   ],
-  install_requires=['setuptools'],
+  install_requires=[
+    'setuptools',
+    'telearm',  # Core telearm package must be installed first
+  ],
   zip_safe=True,
   maintainer='You',
   maintainer_email='you@example.com',

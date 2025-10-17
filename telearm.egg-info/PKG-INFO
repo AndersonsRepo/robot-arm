@@ -1,3 +1,24 @@
+Metadata-Version: 2.4
+Name: telearm
+Version: 0.1.0
+Summary: 5-DOF robot arm control with kinematics and trajectory planning
+License-Expression: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.20.0
+Requires-Dist: scipy>=1.7.0
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: hardware
+Requires-Dist: pyserial>=3.5; extra == "hardware"
+Provides-Extra: ros2
+Requires-Dist: rclpy; extra == "ros2"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: pre-commit; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+
 # Telearm - 5-DOF Robot Arm Control System
 
 A modular Python package for controlling a 5-degree-of-freedom serial robot arm with forward/inverse kinematics, motion control, and hardware abstraction.
