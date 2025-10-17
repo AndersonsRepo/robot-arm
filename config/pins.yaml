@@ -1,0 +1,13 @@
+hardware:
+  arduino:
+    baud_rate: 115200
+    timeout: 0.25
+    default_port: "/dev/ttyUSB0"
+    
+servos:
+  num_joints: 5
+  pins: [3, 5, 6, 9, 10]
+  pwm_us_min: [500, 500, 500, 500, 500]
+  pwm_us_max: [2500, 2500, 2500, 2500, 2500]
+  rad_min: [-3.1416, -1.5708, -2.3562, -2.3562, -3.1416]
+  rad_max: [3.1416, 1.5708, 2.3562, 2.3562, 3.1416]

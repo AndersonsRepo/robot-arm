@@ -1,0 +1,48 @@
+robot:
+  name: "telearm-5dof"
+  dof: 5
+  
+joints:
+  - name: "base_yaw"
+    home: 0.0
+    limit_min: -180.0  # degrees
+    limit_max: 180.0
+    max_vel: 90.0      # deg/s
+    max_acc: 180.0     # deg/s^2
+    
+  - name: "base_pitch"
+    home: 0.0
+    limit_min: -90.0
+    limit_max: 90.0
+    max_vel: 90.0
+    max_acc: 180.0
+    
+  - name: "elbow"
+    home: 0.0
+    limit_min: -135.0
+    limit_max: 135.0
+    max_vel: 90.0
+    max_acc: 180.0
+    
+  - name: "wrist_pitch"
+    home: 0.0
+    limit_min: -135.0
+    limit_max: 135.0
+    max_vel: 90.0
+    max_acc: 180.0
+    
+  - name: "wrist_roll"
+    home: 0.0
+    limit_min: -180.0
+    limit_max: 180.0
+    max_vel: 90.0
+    max_acc: 180.0
+
+dh_parameters:
+  convention: "standard"  # or "modified"
+  links:
+    - {a: 0.05, alpha: 90.0, d: 0.10, theta_offset: 0.0}
+    - {a: 0.15, alpha: 0.0, d: 0.0, theta_offset: 0.0}
+    - {a: 0.12, alpha: 0.0, d: 0.0, theta_offset: 0.0}
+    - {a: 0.05, alpha: 90.0, d: 0.0, theta_offset: 0.0}
+    - {a: 0.02, alpha: 0.0, d: 0.0, theta_offset: 0.0}

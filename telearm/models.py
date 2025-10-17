@@ -5,8 +5,11 @@ Data models for joint specifications, DH parameters, and arm models.
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Dict, Any, Optional
 import numpy as np
+import yaml
+import os
+from pathlib import Path
 
 # -----------------------------
 # Core data models
@@ -65,3 +68,66 @@ def example_model() -> ArmModel:
         DH(a=0.02, alpha=0.0,             d=0.00),
     )
     return ArmModel(joints=joints, dh=dh)
+
+# -----------------------------
+# Configuration loading
+# -----------------------------
+
+def load_robot_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """Load robot configuration from YAML file.
+    
+    Args:
+        config_path: Path to robot.yaml config file. If None, uses default location.
+        
+    Returns:
+        Dictionary containing robot configuration.
+    """
+    if config_path is None:
+        # Default to config/robot.yaml relative to this package
+        package_dir = Path(__file__).parent.parent
+        config_path = package_dir / "config" / "robot.yaml"
+    
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Robot config file not found: {config_path}")
+    
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+def load_from_config(config_path: Optional[str] = None) -> ArmModel:
+    """Create ArmModel from YAML configuration file.
+    
+    Args:
+        config_path: Path to robot.yaml config file. If None, uses default location.
+        
+    Returns:
+        ArmModel loaded from configuration.
+    """
+    config = load_robot_config(config_path)
+    
+    # Build joint specifications
+    joints = []
+    for joint_data in config['joints']:
+        joint_spec = JointSpec(
+            name=joint_data['name'],
+            home=np.deg2rad(joint_data['home']),
+            limit=JointLimit(
+                min=np.deg2rad(joint_data['limit_min']),
+                max=np.deg2rad(joint_data['limit_max'])
+            ),
+            max_vel=np.deg2rad(joint_data.get('max_vel', 90.0)),
+            max_acc=np.deg2rad(joint_data.get('max_acc', 180.0))
+        )
+        joints.append(joint_spec)
+    
+    # Build DH parameters
+    dh_params = []
+    for dh_data in config['dh_parameters']['links']:
+        dh = DH(
+            a=dh_data['a'],
+            alpha=np.deg2rad(dh_data['alpha']),
+            d=dh_data['d'],
+            theta_offset=np.deg2rad(dh_data.get('theta_offset', 0.0))
+        )
+        dh_params.append(dh)
+    
+    return ArmModel(joints=tuple(joints), dh=tuple(dh_params))
