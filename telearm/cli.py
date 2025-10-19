@@ -6,6 +6,7 @@ from pathlib import Path
 
 from . import load_from_config, NullServoDriver, MotionController
 from .drivers import SerialServoDriver
+from .teleoperation.controller import TeleopController
 
 
 def create_controller(args):
@@ -123,6 +124,51 @@ def cmd_calibrate(args):
     print("Calibration completed")
 
 
+def cmd_teleop(args):
+    """Start teleoperation mode."""
+    import signal
+    import time
+    
+    print("Starting teleoperation mode...")
+    print("Press Ctrl+C to stop")
+    
+    # Create teleoperation controller
+    controller = TeleopController(
+        config_path=args.config,
+        use_mock=args.mock
+    )
+    
+    def signal_handler(sig, frame):
+        print("\nStopping teleoperation...")
+        controller.stop()
+        sys.exit(0)
+    
+    # Set up signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    try:
+        # Start controller
+        controller.start()
+        
+        # Keep running until interrupted
+        while True:
+            time.sleep(1.0)
+            
+            # Print status every 10 seconds
+            if int(time.time()) % 10 == 0:
+                status = controller.get_status()
+                print(f"Status: packets={status['packets_received']}, "
+                      f"processed={status['packets_processed']}, "
+                      f"connection={'OK' if status['connection_alive'] else 'TIMEOUT'}")
+    
+    except KeyboardInterrupt:
+        print("\nTeleoperation stopped by user")
+    except Exception as e:
+        print(f"Teleoperation error: {e}")
+    finally:
+        controller.stop()
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(description="Telearm CLI - Control your 5-DOF robot arm")
@@ -150,6 +196,13 @@ def main():
     # Calibrate command
     subparsers.add_parser("calibrate", help="Run calibration routine")
     
+    # Teleop command
+    teleop_parser = subparsers.add_parser("teleop", help="Start teleoperation mode")
+    teleop_parser.add_argument("--config", default="config/teleop.yaml", 
+                              help="Teleoperation config file")
+    teleop_parser.add_argument("--mock", action="store_true", 
+                              help="Use mock operator data (for testing)")
+    
     args = parser.parse_args()
     
     try:
@@ -163,6 +216,8 @@ def main():
             cmd_status(args)
         elif args.command == "calibrate":
             cmd_calibrate(args)
+        elif args.command == "teleop":
+            cmd_teleop(args)
         else:
             parser.print_help()
     except KeyboardInterrupt:

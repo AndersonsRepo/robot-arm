@@ -1,0 +1,14 @@
+teleoperation:
+  velocity_scale: 0.6  # Robot moves at 60% operator speed
+  update_rate_hz: 100  # Control loop frequency
+  timeout_ms: 200      # Watchdog timeout
+  
+  mapping:
+    type: "velocity_based"
+    null_space_gain: 0.1  # Bias toward home in null space
+    
+  safety:
+    enforce_joint_limits: true
+    enforce_workspace: true
+    soft_limit_margin_deg: 5.0
+    emergency_stop_pin: 13  # Arduino pin for E-stop

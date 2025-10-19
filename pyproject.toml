@@ -22,6 +22,7 @@ exclude = ["tests*", "docs*", "config*", "firmware*", "ros2*", "cpp*", "examples
 
 [project.optional-dependencies]
 hardware = ["pyserial>=3.5"]
+teleop = ["pyserial>=3.5", "scipy>=1.7.0"]
 ros2 = ["rclpy"]
 dev = [
     "pytest>=7.0",

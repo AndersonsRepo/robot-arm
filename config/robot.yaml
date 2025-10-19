@@ -46,3 +46,12 @@ dh_parameters:
     - {a: 0.12, alpha: 0.0, d: 0.0, theta_offset: 0.0}
     - {a: 0.05, alpha: 90.0, d: 0.0, theta_offset: 0.0}
     - {a: 0.02, alpha: 0.0, d: 0.0, theta_offset: 0.0}
+
+workspace:
+  type: "box"
+  x_min: -0.3
+  x_max: 0.5
+  y_min: -0.4
+  y_max: 0.4
+  z_min: 0.0
+  z_max: 0.6
