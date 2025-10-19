@@ -2,12 +2,12 @@
  * ESP32 Operator Arm Tracker
  * 
  * Reads 3× MPU-9250 IMU sensors via I2C, fuses data with complementary filter,
- * and transmits operator pose via UDP at 100 Hz.
+ * and transmits operator pose via WiFi UDP or Bluetooth SPP at 100 Hz.
  * 
  * Hardware:
  * - ESP32-WROOM-32
  * - 3× MPU-9250 IMU sensors on I2C
- * - Wi-Fi for UDP transmission
+ * - WiFi for UDP transmission OR Bluetooth Classic SPP
  * 
  * Pinout:
  * - SDA: GPIO 21
@@ -15,20 +15,45 @@
  * - IMU1: I2C address 0x68 (AD0=LOW)
  * - IMU2: I2C address 0x69 (AD0=HIGH)
  * - IMU3: I2C address 0x68 (AD0=LOW, different I2C bus)
+ * - MODE_BUTTON: GPIO 0 (optional, for mode selection)
  */
 
-#include <WiFi.h>
-#include <WiFiUdp.h>
+// Mode selection - uncomment ONE of these:
+#define USE_BLUETOOTH true
+// #define USE_WIFI true
+
+// If neither is defined, default to WiFi
+#ifndef USE_BLUETOOTH
+#ifndef USE_WIFI
+#define USE_WIFI true
+#endif
+#endif
+
 #include <Wire.h>
 #include <MPU9250.h>
 
+#ifdef USE_WIFI
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#endif
+
+#ifdef USE_BLUETOOTH
+#include "BluetoothSerial.h"
+#endif
+
 // Network configuration
+#ifdef USE_WIFI
 const char* ssid = "TelearmNetwork";
 const char* password = "telearm123";
 const int udpPort = 5000;
 const char* targetIP = "192.168.1.100";  // Raspberry Pi IP
-
 WiFiUDP udp;
+#endif
+
+#ifdef USE_BLUETOOTH
+BluetoothSerial SerialBT;
+const char* bluetoothDeviceName = "TelearmOperator";
+#endif
 
 // IMU sensors
 MPU9250 imu1(Wire, 0x68);  // Upper arm
@@ -72,6 +97,14 @@ void setup() {
   
   Serial.println("ESP32 Operator Tracker Starting...");
   
+  // Display communication mode
+  #ifdef USE_BLUETOOTH
+    Serial.println("Mode: Bluetooth Classic SPP");
+  #endif
+  #ifdef USE_WIFI
+    Serial.println("Mode: WiFi UDP");
+  #endif
+  
   // Initialize I2C
   Wire.begin(21, 22);  // SDA, SCL
   Wire.setClock(400000);  // 400kHz
@@ -82,11 +115,15 @@ void setup() {
     while(1) delay(1000);
   }
   
-  // Connect to WiFi
-  connectToWiFi();
+  // Initialize communication
+  #ifdef USE_WIFI
+    connectToWiFi();
+    udp.begin(udpPort);
+  #endif
   
-  // Initialize UDP
-  udp.begin(udpPort);
+  #ifdef USE_BLUETOOTH
+    setupBluetooth();
+  #endif
   
   Serial.println("Operator tracker ready!");
 }
@@ -168,6 +205,19 @@ void connectToWiFi() {
     while(1) delay(1000);
   }
 }
+
+#ifdef USE_BLUETOOTH
+void setupBluetooth() {
+  Serial.print("Initializing Bluetooth: ");
+  Serial.println(bluetoothDeviceName);
+  
+  SerialBT.begin(bluetoothDeviceName);
+  
+  Serial.println("Bluetooth device ready for pairing");
+  Serial.println("Device name: TelearmOperator");
+  Serial.println("Waiting for connection...");
+}
+#endif
 
 void updateIMUFusion() {
   float currentTime = millis() / 1000.0f;
@@ -357,15 +407,33 @@ void transmitOperatorPose() {
   }
   pose.confidence = 0.9f;  // High confidence for now
   
-  // Send UDP packet
-  udp.beginPacket(targetIP, udpPort);
-  udp.write((uint8_t*)&pose, sizeof(pose));
-  udp.endPacket();
+  // Send packet via selected communication method
+  #ifdef USE_WIFI
+    // Send UDP packet
+    udp.beginPacket(targetIP, udpPort);
+    udp.write((uint8_t*)&pose, sizeof(pose));
+    udp.endPacket();
+  #endif
+  
+  #ifdef USE_BLUETOOTH
+    // Send Bluetooth packet
+    if (SerialBT.hasClient()) {
+      SerialBT.write((uint8_t*)&pose, sizeof(pose));
+    }
+  #endif
   
   // Debug output every 50 packets
   if (sequence % 50 == 0) {
     Serial.printf("Sent packet %u: angles=[%.3f, %.3f, %.3f] vel=[%.3f, %.3f, %.3f]\n",
                   sequence, joint_angles[0], joint_angles[1], joint_angles[2],
                   joint_velocities[0], joint_velocities[1], joint_velocities[2]);
+    
+    #ifdef USE_BLUETOOTH
+      if (SerialBT.hasClient()) {
+        Serial.println("Bluetooth: Connected");
+      } else {
+        Serial.println("Bluetooth: No client connected");
+      }
+    #endif
   }
 }

@@ -1,0 +1,14 @@
+[Unit]
+Description=Telearm Bluetooth Serial Binding
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rfcomm bind /dev/rfcomm0 %i 1
+ExecStop=/usr/bin/rfcomm release /dev/rfcomm0
+RemainAfterExit=yes
+User=root
+
+[Install]
+WantedBy=multi-user.target

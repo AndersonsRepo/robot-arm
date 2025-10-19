@@ -1,7 +1,16 @@
 teleoperation:
+  mode: "wifi"  # Communication mode: "wifi" or "bluetooth"
   velocity_scale: 0.6  # Robot moves at 60% operator speed
   update_rate_hz: 100  # Control loop frequency
   timeout_ms: 200      # Watchdog timeout
+  
+  # WiFi settings (for mode: "wifi")
+  port: 5000           # UDP port for WiFi communication
+  
+  # Bluetooth settings (for mode: "bluetooth")
+  bluetooth:
+    port: "/dev/rfcomm0"  # Bluetooth serial port
+    baud_rate: 115200     # Serial baud rate
   
   mapping:
     type: "velocity_based"
