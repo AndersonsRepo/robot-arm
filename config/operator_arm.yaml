@@ -1,0 +1,22 @@
+operator_arm:
+  name: "human-arm-3dof"
+  dof: 3  # shoulder_pitch, elbow, wrist
+  
+segments:
+  - name: "upper_arm"
+    length: 0.30  # meters
+    imu_id: 0
+  - name: "forearm"  
+    length: 0.25
+    imu_id: 1
+  - name: "hand"
+    length: 0.08
+    imu_id: 2
+
+# Simplified 3-DOF DH for operator arm
+dh_parameters:
+  convention: "standard"
+  links:
+    - {a: 0.30, alpha: 0.0, d: 0.0}  # upper arm
+    - {a: 0.25, alpha: 0.0, d: 0.0}  # forearm
+    - {a: 0.08, alpha: 0.0, d: 0.0}  # hand

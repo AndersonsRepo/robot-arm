@@ -47,6 +47,20 @@ class ArmModel:
     def n(self) -> int:
         return len(self.joints)
 
+@dataclass
+class OperatorSegment:
+    name: str
+    length: float  # meters
+    imu_id: int
+
+@dataclass
+class OperatorArmModel:
+    segments: Tuple[OperatorSegment, ...]
+    dh: Tuple[DH, ...]
+
+    def n(self) -> int:
+        return len(self.segments)
+
 # -----------------------------
 # Example: define a 5-DOF model (placeholder numbers!)
 # -----------------------------
@@ -131,3 +145,57 @@ def load_from_config(config_path: Optional[str] = None) -> ArmModel:
         dh_params.append(dh)
     
     return ArmModel(joints=tuple(joints), dh=tuple(dh_params))
+
+def load_operator_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """Load operator arm configuration from YAML file.
+    
+    Args:
+        config_path: Path to operator_arm.yaml config file. If None, uses default location.
+        
+    Returns:
+        Dictionary containing operator arm configuration.
+    """
+    if config_path is None:
+        # Default to config/operator_arm.yaml relative to this package
+        package_dir = Path(__file__).parent.parent
+        config_path = package_dir / "config" / "operator_arm.yaml"
+    
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Operator config file not found: {config_path}")
+    
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+def load_operator_from_config(config_path: Optional[str] = None) -> OperatorArmModel:
+    """Create OperatorArmModel from YAML configuration file.
+    
+    Args:
+        config_path: Path to operator_arm.yaml config file. If None, uses default location.
+        
+    Returns:
+        OperatorArmModel loaded from configuration.
+    """
+    config = load_operator_config(config_path)
+    
+    # Build segment specifications
+    segments = []
+    for segment_data in config['segments']:
+        segment = OperatorSegment(
+            name=segment_data['name'],
+            length=segment_data['length'],
+            imu_id=segment_data['imu_id']
+        )
+        segments.append(segment)
+    
+    # Build DH parameters
+    dh_params = []
+    for dh_data in config['dh_parameters']['links']:
+        dh = DH(
+            a=dh_data['a'],
+            alpha=np.deg2rad(dh_data['alpha']),
+            d=dh_data['d'],
+            theta_offset=np.deg2rad(dh_data.get('theta_offset', 0.0))
+        )
+        dh_params.append(dh)
+    
+    return OperatorArmModel(segments=tuple(segments), dh=tuple(dh_params))
