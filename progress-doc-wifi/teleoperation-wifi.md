@@ -2,15 +2,19 @@
 
 ## System Architecture Overview
 
-The teleoperation system implements a distributed architecture with three main components:
+The teleoperation system implements a distributed architecture with three main components, supporting both WiFi and Bluetooth communication modes:
 
 ```
-┌─────────────────┐    Wi-Fi UDP     ┌─────────────────┐    Serial     ┌─────────────────┐
-│   ESP32 + IMUs  │ ──────────────── │  Raspberry Pi   │ ──────────── │    Arduino      │
-│  (Operator)     │   100 Hz         │  (Controller)   │              │   (Servos)      │
-│                 │   <50ms latency  │                 │              │                 │
-└─────────────────┘                  └─────────────────┘              └─────────────────┘
+┌─────────────────┐    WiFi UDP /     ┌─────────────────┐    Serial     ┌─────────────────┐
+│   ESP32 + IMUs  │ ── Bluetooth ──→ │  Raspberry Pi   │ ──────────── │    Arduino      │
+│  (Operator)     │    SPP            │  (Controller)   │              │   (Servos)      │
+│                 │   100 Hz          │                 │              │                 │
+└─────────────────┘                   └─────────────────┘              └─────────────────┘
 ```
+
+### Communication Modes
+- **WiFi Mode**: ESP32 → WiFi UDP → Raspberry Pi → USB Serial → Arduino
+- **Bluetooth Mode**: ESP32 → Bluetooth SPP → Raspberry Pi → USB Serial → Arduino
 
 ## Core Components & Data Flow
 
@@ -21,18 +25,18 @@ The teleoperation system implements a distributed architecture with three main c
 - Read 3× MPU-9250 IMU sensors via I2C
 - Apply complementary filter for orientation estimation
 - Estimate joint angles from IMU orientations
-- Pack data into 40-byte UDP packets
-- Transmit at 100 Hz via Wi-Fi
+- Pack data into 40-byte packets
+- Transmit at 100 Hz via WiFi UDP or Bluetooth SPP
 
 **Data Flow**:
 ```
-IMU Raw Data → Complementary Filter → Joint Angles → UDP Packet → Wi-Fi
+IMU Raw Data → Complementary Filter → Joint Angles → Packet → WiFi/Bluetooth
 ```
 
 **Key Classes/Functions**:
 - `FilterState` struct: Maintains quaternion state for each IMU
 - `updateComplementaryFilter()`: Fuses accelerometer and gyroscope data
-- `transmitOperatorPose()`: Creates and sends UDP packets
+- `transmitOperatorPose()`: Creates and sends packets via WiFi or Bluetooth
 
 ### 2. Network Communication (Python)
 **Location**: `telearm/network/`
@@ -42,9 +46,23 @@ IMU Raw Data → Complementary Filter → Joint Angles → UDP Packet → Wi-Fi
 
 **Key Components**:
 - `TeleopPacket` dataclass: 40-byte packet structure
-- `pack()` method: Serializes to UDP bytes
-- `unpack()` method: Deserializes from UDP bytes
+- `pack()` method: Serializes to bytes
+- `unpack()` method: Deserializes from bytes
 - `NetworkStats` class: Tracks latency, jitter, packet loss
+
+#### Receiver Factory (`receiver.py`)
+**Purpose**: Creates appropriate receiver based on configuration
+
+**Key Components**:
+- `create_receiver()` function: Factory for WiFi/Bluetooth receivers
+- `OperatorDataReceiver`: WiFi UDP receiver
+- `BluetoothOperatorDataReceiver`: Bluetooth serial receiver
+
+#### WiFi Receiver (`operator_data_receiver.py`)
+**Purpose**: Receives operator data via WiFi UDP
+
+#### Bluetooth Receiver (`bluetooth_receiver.py`)
+**Purpose**: Receives operator data via Bluetooth serial
 
 **Packet Format** (40 bytes):
 ```

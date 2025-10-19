@@ -1,8 +1,9 @@
 """
 Tests for teleoperation system components.
 
-Tests IMU fusion, network protocol, velocity mapping, safety checking,
-and integration with mock data.
+Tests network protocol, velocity mapping, safety checking,
+and integration with mock data. Note: IMU fusion is now handled
+in the ESP32 firmware.
 """
 import pytest
 import numpy as np
@@ -11,52 +12,12 @@ from unittest.mock import Mock, patch
 
 from telearm.models import load_from_config, load_operator_from_config
 from telearm.sensors import IMUReading, OperatorPose, TeleopPacket, create_mock_imu_reading, create_mock_operator_pose
-from telearm.imu_fusion import ComplementaryFilter, OperatorPoseEstimator
 from telearm.network.protocol import TeleopProtocol, NetworkStats
 from telearm.network.receiver import MockOperatorDataReceiver
 from telearm.teleoperation.mapper import VelocityMapper, CartesianVelocityMapper
 from telearm.teleoperation.integrator import VelocityIntegrator, SmoothVelocityIntegrator
 from telearm.safety.checker import SafetyChecker, EmergencyStopHandler
 from telearm.teleoperation.controller import TeleopController
-
-
-class TestIMUFusion:
-    """Test IMU fusion algorithms."""
-    
-    def test_complementary_filter(self):
-        """Test complementary filter with mock data."""
-        filter = ComplementaryFilter(alpha=0.98)
-        
-        # Create mock IMU reading
-        reading = create_mock_imu_reading(imu_id=0)
-        
-        # Update filter
-        orientation = filter.update(reading)
-        
-        assert orientation.imu_id == 0
-        assert len(orientation.quaternion) == 4
-        assert len(orientation.euler_angles) == 3
-        assert 0 <= orientation.confidence <= 1
-        
-        # Test quaternion normalization
-        quat_norm = np.linalg.norm(orientation.quaternion)
-        assert abs(quat_norm - 1.0) < 1e-6
-    
-    def test_operator_pose_estimator(self):
-        """Test operator pose estimation."""
-        operator_model = load_operator_from_config()
-        estimator = OperatorPoseEstimator(operator_model)
-        
-        # Create mock IMU readings
-        readings = [create_mock_imu_reading(i) for i in range(3)]
-        
-        # Fuse data
-        pose = estimator.fuse_imu_data(readings)
-        
-        assert len(pose.joint_angles) == 3
-        assert len(pose.joint_velocities) == 3
-        assert 0 <= pose.confidence <= 1
-        assert len(pose.orientations) == 3
 
 
 class TestNetworkProtocol:
