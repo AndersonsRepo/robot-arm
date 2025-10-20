@@ -13,9 +13,22 @@ These classes are primarily used for:
 from __future__ import annotations
 import numpy as np
 import time
-from typing import List, Optional, Tuple
+from typing import List
 from dataclasses import dataclass
 from .sensors import IMUReading, Orientation, OperatorPose
+
+
+def quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Multiply two quaternions."""
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    
+    return np.array([
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2
+    ])
 
 
 @dataclass
@@ -77,9 +90,10 @@ class ComplementaryFilter:
             self.state.initialized = True
         
         # Normalize accelerometer
-        accel_norm = np.linalg.norm(accel)
+        accel_corr = accel - self.state.accel_bias
+        accel_norm = np.linalg.norm(accel_corr)
         if accel_norm > 0.1:  # Avoid division by zero
-            accel_unit = accel / accel_norm
+            accel_unit = accel_corr / accel_norm
         else:
             accel_unit = np.array([0, 0, 1])  # Default to gravity direction
         
@@ -90,11 +104,16 @@ class ComplementaryFilter:
         # Accelerometer correction
         q_accel = self._accel_to_quaternion(accel_unit)
         
-        # Complementary filter fusion
-        self.state.quaternion = self._slerp(q_gyro, q_accel, 1.0 - self.alpha)
+        # Complementary filter fusion (gate accel correction by gyro magnitude)
+        gyro_mag = np.linalg.norm(gyro_corrected)
+        t = (1.0 - self.alpha) if gyro_mag <= self.gyro_threshold else 0.0
+        self.state.quaternion = self._slerp(q_gyro, q_accel, t)
         
         # Normalize quaternion
         self.state.quaternion = self.state.quaternion / np.linalg.norm(self.state.quaternion)
+        
+        # Update time tracking
+        self.state.prev_time += dt
         
         return self.state.quaternion.copy()
     
@@ -136,7 +155,7 @@ class ComplementaryFilter:
         ])
         
         # Apply rotation
-        return self._quaternion_multiply(self.state.quaternion, q_rot)
+        return quat_mul(self.state.quaternion, q_rot)
     
     def _accel_to_quaternion(self, accel: np.ndarray) -> np.ndarray:
         """Convert accelerometer reading to quaternion."""
@@ -188,7 +207,7 @@ class ComplementaryFilter:
             return result / np.linalg.norm(result)
         
         # Calculate angle
-        theta = np.arccos(np.abs(dot))
+        theta = np.arccos(dot)
         sin_theta = np.sin(theta)
         
         # Spherical interpolation
@@ -196,18 +215,6 @@ class ComplementaryFilter:
         w2 = np.sin(t * theta) / sin_theta
         
         return w1 * q1 + w2 * q2
-    
-    def _quaternion_multiply(self, q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-        """Multiply two quaternions."""
-        w1, x1, y1, z1 = q1
-        w2, x2, y2, z2 = q2
-        
-        return np.array([
-            w1*w2 - x1*x2 - y1*y2 - z1*z2,
-            w1*x2 + x1*w2 + y1*z2 - z1*y2,
-            w1*y2 - x1*z2 + y1*w2 + z1*x2,
-            w1*z2 + x1*y2 - y1*x2 + z1*w2
-        ])
     
     def quaternion_to_euler(self, q: np.ndarray) -> np.ndarray:
         """Convert quaternion to Euler angles (roll, pitch, yaw)."""
@@ -293,7 +300,7 @@ class OperatorPoseEstimator:
             quaternion = self.filters[i].update(accel, gyro, dt)
             
             # Apply mounting orientation correction
-            corrected_quat = self._quaternion_multiply(quaternion, self.imu_orientations[i])
+            corrected_quat = quat_mul(quaternion, self.imu_orientations[i])
             
             orientations.append(Orientation(
                 timestamp=reading.timestamp,
@@ -311,7 +318,8 @@ class OperatorPoseEstimator:
             timestamp=current_time,
             joint_angles=joint_angles,
             joint_velocities=joint_velocities,
-            confidence=0.9
+            confidence=0.9,
+            orientations=orientations
         )
     
     def _estimate_joint_angles(self, orientations: List[Orientation]) -> List[float]:
@@ -351,27 +359,11 @@ class OperatorPoseEstimator:
         if dt <= 0:
             return [0.0, 0.0, 0.0]
         
-        # Use gyroscope data for velocity estimation
-        velocities = []
-        for orientation in orientations:
-            # Extract gyro data (would need to store previous readings)
-            # For mock data, use a simple approximation
-            vel = np.random.normal(0, 0.1, 3)  # Random small velocities
-            velocities.append(vel[1])  # Use pitch component
+        # Use deterministic random velocities for mock data
+        rng = np.random.default_rng(0)  # deterministic for tests
+        velocities = [float(rng.normal(0.0, 0.1)) for _ in orientations]  # mock pitch rates
         
         return velocities[:3]  # Return first 3 velocities
-    
-    def _quaternion_multiply(self, q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-        """Multiply two quaternions."""
-        w1, x1, y1, z1 = q1
-        w2, x2, y2, z2 = q2
-        
-        return np.array([
-            w1*w2 - x1*x2 - y1*y2 - z1*z2,
-            w1*x2 + x1*w2 + y1*z2 - z1*y2,
-            w1*y2 - x1*z2 + y1*w2 + z1*x2,
-            w1*z2 + x1*y2 - y1*x2 + z1*w2
-        ])
 
 
 # Convenience functions for mock data generation
@@ -395,22 +387,21 @@ def create_mock_imu_fusion_data(num_samples: int = 100) -> List[OperatorPose]:
             reading = IMUReading(
                 imu_id=j,
                 timestamp=time.time(),
-                accel=type('Accel', (), {
-                    'x': np.random.normal(0, 0.1),
-                    'y': np.random.normal(0, 0.1),
-                    'z': np.random.normal(9.81, 0.1)
-                })(),
-                gyro=type('Gyro', (), {
-                    'x': np.random.normal(0, 0.01),
-                    'y': np.random.normal(0, 0.01),
-                    'z': np.random.normal(0, 0.01)
-                })(),
-                mag=type('Mag', (), {
-                    'x': np.random.normal(0, 1),
-                    'y': np.random.normal(0, 1),
-                    'z': np.random.normal(0, 1)
-                })(),
-                temperature=25.0
+                accel=np.array([
+                    np.random.normal(0, 0.1),
+                    np.random.normal(0, 0.1),
+                    np.random.normal(9.81, 0.1)
+                ]),
+                gyro=np.array([
+                    np.random.normal(0, 0.01),
+                    np.random.normal(0, 0.01),
+                    np.random.normal(0, 0.01)
+                ]),
+                mag=np.array([
+                    np.random.normal(0, 1),
+                    np.random.normal(0, 1),
+                    np.random.normal(0, 1)
+                ])
             )
             imu_readings.append(reading)
         
@@ -462,10 +453,9 @@ def validate_imu_fusion_algorithm():
         reading = IMUReading(
             imu_id=i,
             timestamp=time.time(),
-            accel=type('Accel', (), {'x': 0, 'y': 0, 'z': 9.81})(),
-            gyro=type('Gyro', (), {'x': 0, 'y': 0, 'z': 0})(),
-            mag=type('Mag', (), {'x': 0, 'y': 0, 'z': 0})(),
-            temperature=25.0
+            accel=np.array([0, 0, 9.81]),
+            gyro=np.array([0, 0, 0]),
+            mag=np.array([0, 0, 0])
         )
         imu_readings.append(reading)
     

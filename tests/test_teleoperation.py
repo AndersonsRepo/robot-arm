@@ -454,10 +454,9 @@ class TestIMUFusion:
             reading = IMUReading(
                 imu_id=i,
                 timestamp=time.time(),
-                accel=type('Accel', (), {'x': 0, 'y': 0, 'z': 9.81})(),
-                gyro=type('Gyro', (), {'x': 0, 'y': 0, 'z': 0})(),
-                mag=type('Mag', (), {'x': 0, 'y': 0, 'z': 0})(),
-                temperature=25.0
+                accel=np.array([0, 0, 9.81]),
+                gyro=np.array([0, 0, 0]),
+                mag=np.array([0, 0, 0])
             )
             imu_readings.append(reading)
         
