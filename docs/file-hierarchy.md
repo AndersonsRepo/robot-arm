@@ -281,7 +281,7 @@ firmware/
 ├── arduino/                           # Arduino Uno firmware
 │   └── telearm_driver/
 │       └── telearm_driver.ino         # Servo control firmware
-│           ├── setup()                # Initialize servos and serial
+│           ├── setup()                # Initialize servos and serial // need too look at more for overlode 
 │           ├── loop()                 # Main control loop
 │           ├── parseCommand()         # Parse incoming commands
 │           ├── moveServo()            # Move individual servo
@@ -291,7 +291,7 @@ firmware/
 └── esp32/                             # ESP32 operator tracker firmware
     └── operator_tracker/
         └── operator_tracker.ino       # IMU fusion and communication
-            ├── setup()                # Initialize IMUs and communication
+            ├── setup()                # Initialize IMUs and communication // need too look at more for overlode 
             ├── loop()                 # Main control loop
             ├── initializeIMUs()       # Initialize MPU-9250 sensors
             ├── connectToWiFi()        # Connect to WiFi network
