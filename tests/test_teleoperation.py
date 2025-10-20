@@ -2,8 +2,9 @@
 Tests for teleoperation system components.
 
 Tests network protocol, velocity mapping, safety checking,
-and integration with mock data. Note: IMU fusion is now handled
-in the ESP32 firmware.
+IMU fusion algorithms, and integration with mock data.
+Note: IMU fusion runs on ESP32 firmware in production, but
+Python implementation is available for testing and development.
 """
 import pytest
 import numpy as np
@@ -18,6 +19,7 @@ from telearm.teleoperation.mapper import VelocityMapper, CartesianVelocityMapper
 from telearm.teleoperation.integrator import VelocityIntegrator, SmoothVelocityIntegrator
 from telearm.safety.checker import SafetyChecker, EmergencyStopHandler
 from telearm.teleoperation.controller import TeleopController
+from telearm.imu_fusion import ComplementaryFilter, OperatorPoseEstimator, create_mock_imu_fusion_data
 
 
 class TestNetworkProtocol:
@@ -378,6 +380,104 @@ class TestIntegration:
         assert len(actual_velocities) == 5
         assert np.all(np.isfinite(new_positions))
         assert np.all(np.isfinite(actual_velocities))
+
+
+class TestIMUFusion:
+    """Test IMU fusion algorithms for mock data generation."""
+    
+    def test_complementary_filter_initialization(self):
+        """Test complementary filter initialization."""
+        filter_obj = ComplementaryFilter()
+        assert filter_obj.alpha == 0.98
+        assert filter_obj.gyro_threshold == 0.1
+        assert not filter_obj.state.initialized
+    
+    def test_complementary_filter_update(self):
+        """Test complementary filter update with gravity."""
+        filter_obj = ComplementaryFilter()
+        
+        # Test with gravity vector
+        accel = np.array([0, 0, 9.81])
+        gyro = np.array([0, 0, 0])
+        dt = 0.01
+        
+        quat = filter_obj.update(accel, gyro, dt)
+        
+        # Should be initialized after first update
+        assert filter_obj.state.initialized
+        assert quat is not None
+        assert len(quat) == 4
+        assert np.isclose(np.linalg.norm(quat), 1.0)  # Should be normalized
+    
+    def test_complementary_filter_rotation(self):
+        """Test complementary filter with rotation."""
+        filter_obj = ComplementaryFilter()
+        
+        # Test with rotation
+        accel = np.array([0, 0, 9.81])
+        gyro = np.array([0, 0, 1.0])  # 1 rad/s rotation
+        dt = 0.01
+        
+        # Update multiple times
+        for _ in range(10):
+            quat = filter_obj.update(accel, gyro, dt)
+        
+        # Should have rotated
+        assert quat is not None
+        assert np.isclose(np.linalg.norm(quat), 1.0)
+    
+    def test_quaternion_to_euler(self):
+        """Test quaternion to Euler angle conversion."""
+        filter_obj = ComplementaryFilter()
+        
+        # Test identity quaternion
+        q_identity = np.array([1, 0, 0, 0])
+        euler = filter_obj.quaternion_to_euler(q_identity)
+        
+        assert len(euler) == 3
+        assert np.allclose(euler, [0, 0, 0], atol=1e-6)
+    
+    def test_operator_pose_estimator_initialization(self):
+        """Test operator pose estimator initialization."""
+        estimator = OperatorPoseEstimator()
+        assert estimator.num_imus == 3
+        assert len(estimator.filters) == 3
+        assert len(estimator.imu_orientations) == 3
+    
+    def test_operator_pose_estimator_update(self):
+        """Test operator pose estimation from IMU readings."""
+        estimator = OperatorPoseEstimator()
+        
+        # Create mock IMU readings
+        imu_readings = []
+        for i in range(3):
+            reading = IMUReading(
+                imu_id=i,
+                timestamp=time.time(),
+                accel=type('Accel', (), {'x': 0, 'y': 0, 'z': 9.81})(),
+                gyro=type('Gyro', (), {'x': 0, 'y': 0, 'z': 0})(),
+                mag=type('Mag', (), {'x': 0, 'y': 0, 'z': 0})(),
+                temperature=25.0
+            )
+            imu_readings.append(reading)
+        
+        pose = estimator.update(imu_readings)
+        
+        assert pose is not None
+        assert len(pose.joint_angles) == 3
+        assert len(pose.joint_velocities) == 3
+        assert pose.confidence > 0
+    
+    def test_mock_imu_fusion_data_generation(self):
+        """Test mock IMU fusion data generation."""
+        poses = create_mock_imu_fusion_data(num_samples=10)
+        
+        assert len(poses) == 10
+        for pose in poses:
+            assert pose is not None
+            assert len(pose.joint_angles) == 3
+            assert len(pose.joint_velocities) == 3
+            assert pose.confidence > 0
 
 
 if __name__ == "__main__":

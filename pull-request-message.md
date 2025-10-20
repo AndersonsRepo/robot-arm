@@ -71,10 +71,12 @@ This PR also includes several critical fixes that were identified during develop
 - `ros2/package.xml` - Updated maintainer email to fullerton.cs.club@gmail.com
 - `ros2/telearm_ros2/joint_state_bridge.py` - Fixed IK warm-starting and updated to current API
 - `scripts/telearm-bluetooth.service` - Fixed RFCOMM channel configuration
-- `tests/test_teleoperation.py` - Removed outdated IMU fusion tests
+- `tests/test_teleoperation.py` - Updated with IMU fusion tests
+
+### 🔄 Files Restored
+- `telearm/imu_fusion.py` - IMU fusion algorithms restored for testing/development
 
 ### 🗑️ Files Removed
-- `telearm/imu_fusion.py` - Functionality moved to ESP32 firmware
 - `cpp/` directory - Unused Arduino-specific error handling code
 - `progress-doc-manual/` directory - Outdated refactor documentation
 

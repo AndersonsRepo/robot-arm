@@ -40,6 +40,7 @@ robot-arm/
 │   ├── cli.py                         # Command-line interface
 │   ├── control.py                     # Motion control algorithms
 │   ├── ik.py                          # Inverse kinematics solver
+│   ├── imu_fusion.py                  # IMU fusion algorithms (testing/development)
 │   ├── kinematics.py                  # Forward kinematics
 │   ├── models.py                      # Robot and operator models
 │   ├── sensors.py                     # Sensor data structures
@@ -170,6 +171,13 @@ telearm/
 │   ├── TeleopPacket                   # Network packet format
 │   ├── create_mock_imu_reading()      # Mock IMU data
 │   └── create_mock_operator_pose()    # Mock operator pose
+│
+├── imu_fusion.py                      # IMU fusion algorithms
+│   ├── ComplementaryFilter            # Quaternion-based orientation estimation
+│   ├── OperatorPoseEstimator          # Multi-IMU pose estimation
+│   ├── FilterState                    # Filter state management
+│   ├── create_mock_imu_fusion_data()  # Mock data generation
+│   └── validate_imu_fusion_algorithm() # Algorithm validation
 │
 ├── drivers/                           # Hardware abstraction
 │   ├── __init__.py

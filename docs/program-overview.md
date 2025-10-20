@@ -34,6 +34,8 @@ telearm/network/bluetooth_receiver.py OR telearm/network/operator_data_receiver.
 telearm/network/protocol.py
     ↓
 telearm/sensors.py (TeleopPacket)
+    ↓
+telearm/imu_fusion.py (for mock data/testing)
 ```
 
 #### Key Components
@@ -68,6 +70,12 @@ telearm/sensors.py (TeleopPacket)
 **6. Hardware Drivers (`telearm/drivers/`)**
 - `serial_arduino.py`: Arduino servo control
 - `null_driver.py`: Simulation mode
+
+**7. IMU Fusion (`telearm/imu_fusion.py`)**
+- `ComplementaryFilter`: Quaternion-based orientation estimation
+- `OperatorPoseEstimator`: Multi-IMU pose estimation
+- Mock data generation for testing and development
+- Note: Production IMU fusion runs on ESP32 firmware at 200Hz
 
 ### Configuration Files (`config/`)
 
