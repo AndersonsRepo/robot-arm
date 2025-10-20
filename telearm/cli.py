@@ -128,14 +128,35 @@ def cmd_teleop(args):
     """Start teleoperation mode."""
     import signal
     import time
+    import yaml
     
     print("Starting teleoperation mode...")
     print("Press Ctrl+C to stop")
     
-    # Create teleoperation controller
+    # Load config and apply CLI overrides
+    config = {}
+    try:
+        with open(args.config, 'r') as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        print(f"Warning: Could not load config from {args.config}: {e}")
+    
+    # Apply CLI overrides
+    if args.mode:
+        config['mode'] = args.mode
+        print(f"Mode override: {args.mode}")
+    
+    if args.bt_port and args.mode == 'bluetooth':
+        if 'bluetooth' not in config:
+            config['bluetooth'] = {}
+        config['bluetooth']['port'] = args.bt_port
+        print(f"Bluetooth port override: {args.bt_port}")
+    
+    # Create teleoperation controller with modified config
     controller = TeleopController(
         config_path=args.config,
-        use_mock=args.mock
+        use_mock=args.mock,
+        config_override=config
     )
     
     def signal_handler(sig, frame):
@@ -202,6 +223,10 @@ def main():
                               help="Teleoperation config file")
     teleop_parser.add_argument("--mock", action="store_true", 
                               help="Use mock operator data (for testing)")
+    teleop_parser.add_argument("--mode", choices=["wifi", "bluetooth"], 
+                              help="Communication mode (overrides config)")
+    teleop_parser.add_argument("--bt-port", default="/dev/rfcomm0",
+                              help="Bluetooth serial port")
     
     args = parser.parse_args()
     

@@ -307,5 +307,41 @@ def test_receiver():
     print("UDP receiver test completed")
 
 
+def create_receiver(config: dict, use_mock: bool = False):
+    """
+    Create appropriate receiver based on configuration.
+    
+    Args:
+        config: Configuration dictionary containing mode and connection settings
+        use_mock: If True, return MockOperatorDataReceiver regardless of mode
+        
+    Returns:
+        OperatorDataReceiver, BluetoothOperatorDataReceiver, or MockOperatorDataReceiver instance
+    """
+    if use_mock:
+        return MockOperatorDataReceiver(
+            port=config.get('port', 5000),
+            buffer_size=config.get('buffer_size', 10)
+        )
+    
+    mode = config.get('mode', 'wifi').lower()
+    
+    if mode == 'bluetooth':
+        from .bluetooth_receiver import BluetoothOperatorDataReceiver
+        bluetooth_config = config.get('bluetooth', {})
+        return BluetoothOperatorDataReceiver(
+            port=bluetooth_config.get('port', '/dev/rfcomm0'),
+            baud=bluetooth_config.get('baud_rate', 115200),
+            buffer_size=config.get('buffer_size', 10),
+            timeout_seconds=config.get('timeout_ms', 200) / 1000.0
+        )
+    else:  # Default to WiFi
+        return OperatorDataReceiver(
+            port=config.get('port', 5000),
+            buffer_size=config.get('buffer_size', 10),
+            timeout_seconds=config.get('timeout_ms', 200) / 1000.0
+        )
+
+
 if __name__ == "__main__":
     test_receiver()

@@ -15,7 +15,7 @@ from typing import Dict, Any, Optional
 import numpy as np
 
 from ..models import load_from_config, load_operator_from_config
-from ..network.receiver import OperatorDataReceiver, MockOperatorDataReceiver
+from ..network.receiver import OperatorDataReceiver, MockOperatorDataReceiver, create_receiver
 from ..safety.checker import SafetyChecker, EmergencyStopHandler
 from ..teleoperation.mapper import VelocityMapper
 from ..teleoperation.integrator import VelocityIntegrator
@@ -25,16 +25,21 @@ from ..drivers import SerialServoDriver, NullServoDriver
 class TeleopController:
     """Main teleoperation controller."""
     
-    def __init__(self, config_path: str = "config/teleop.yaml", use_mock: bool = False):
+    def __init__(self, config_path: str = "config/teleop.yaml", use_mock: bool = False, config_override: Optional[Dict[str, Any]] = None):
         """
         Initialize teleoperation controller.
         
         Args:
             config_path: Path to teleoperation configuration file
             use_mock: Use mock receiver for testing without hardware
+            config_override: Optional config dictionary to override file settings
         """
         # Load configurations
         self.config = self._load_config(config_path)
+        
+        # Apply config overrides if provided
+        if config_override:
+            self.config.update(config_override)
         self.robot_model = load_from_config()
         self.operator_model = load_operator_from_config()
         
@@ -44,18 +49,8 @@ class TeleopController:
         self.emergency_handler = EmergencyStopHandler(self.config)
         self.integrator = VelocityIntegrator(self.robot_model, dt=1.0/self.config['update_rate_hz'])
         
-        # Network receiver
-        if use_mock:
-            self.receiver = MockOperatorDataReceiver(
-                port=self.config.get('port', 5000),
-                buffer_size=10
-            )
-        else:
-            self.receiver = OperatorDataReceiver(
-                port=self.config.get('port', 5000),
-                buffer_size=10,
-                timeout_seconds=self.config['timeout_ms'] / 1000.0
-            )
+        # Network receiver - use factory for mode selection
+        self.receiver = create_receiver(self.config, use_mock=use_mock)
         
         # Hardware driver
         self.driver = self._create_driver()

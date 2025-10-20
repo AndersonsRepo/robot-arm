@@ -1,6 +1,6 @@
 # Telearm - 5-DOF Robot Arm Control System
 
-A modular Python package for controlling a 5-degree-of-freedom serial robot arm with forward/inverse kinematics, motion control, and hardware abstraction.
+A modular Python package for controlling a 5-degree-of-freedom serial robot arm with forward/inverse kinematics, motion control, and hardware abstraction. Supports both WiFi and Bluetooth teleoperation modes.
 
 ## Quick Start
 
@@ -58,7 +58,31 @@ telearm calibrate
 
 # Use simulation mode (no hardware)
 telearm --sim home
+
+# Start teleoperation with WiFi mode
+telearm teleop --mode wifi
+
+# Start teleoperation with Bluetooth mode
+telearm teleop --mode bluetooth
 ```
+
+## Communication Modes
+
+Telearm supports two wireless communication modes for teleoperation:
+
+### WiFi Mode (Default)
+- **Range**: 30-50m indoor, 100m+ outdoor
+- **Latency**: 5-15ms typical
+- **Setup**: Requires WiFi network configuration
+- **Use Case**: Longer range, multiple devices, network integration
+
+### Bluetooth Mode
+- **Range**: 10-30m indoor, 50-100m outdoor  
+- **Latency**: 10-20ms typical
+- **Setup**: Direct pairing, no network required
+- **Use Case**: Simple setup, point-to-point connection, no WiFi available
+
+Both modes use the same packet format and control algorithms. Switch between modes via configuration or CLI arguments.
 
 ## Package Structure
 
@@ -69,24 +93,37 @@ telearm --sim home
 - **`trajectory.py`** - Cubic time scaling trajectory generation
 - **`control.py`** - Motion controller with hardware abstraction
 - **`drivers/`** - Hardware drivers (simulation and serial Arduino)
+- **`network/`** - Network communication (WiFi UDP and Bluetooth Serial)
+- **`teleoperation/`** - Teleoperation control and mapping
+- **`safety/`** - Safety checking and emergency stop handling
 - **`cli.py`** - Command-line interface for robot control
 
 ### Configuration (`config/`)
 - **`robot.yaml`** - Robot parameters (DH, joint limits, home positions)
 - **`pins.yaml`** - Hardware configuration (Arduino pins, PWM settings)
+- **`teleop.yaml`** - Teleoperation settings (WiFi/Bluetooth mode, safety parameters)
 
 ### Hardware (`firmware/`)
 - **`arduino/telearm_driver/telearm_driver.ino`** - Arduino sketch for servo control
+- **`esp32/operator_tracker/operator_tracker.ino`** - ESP32 firmware for IMU tracking (WiFi/Bluetooth)
 
 ### ROS 2 Integration (`ros2/`)
 - **`telearm_ros2/`** - ROS 2 package for RViz visualization
 - **`launch/telearm_rviz.launch.py`** - Launch file for ROS 2 visualization
 - **`urdf/telearm.urdf`** - URDF model for robot visualization
 
+### Documentation (`docs/`)
+- **`setup.md`** - Installation and setup guide
+- **`wiring.md`** - Hardware wiring instructions
+- **`safety.md`** - Safety procedures and guidelines
+- **`bluetooth-setup.md`** - Bluetooth configuration and troubleshooting
+
+### Scripts (`scripts/`)
+- **`setup_bluetooth_pi.sh`** - Automated Raspberry Pi Bluetooth pairing
+
 ### Examples and Tests
 - **`examples/`** - Example scripts and usage demonstrations
 - **`tests/`** - Comprehensive pytest test suite
-- **`docs/`** - Documentation (wiring, setup, safety)
 
 ## Development
 

@@ -2,22 +2,27 @@
 
 ## Overview
 
-The Telearm telemanipulation system enables real-time control of a 5-DOF robot arm using IMU-tracked operator arm movements. The system implements velocity-based Jacobian mapping with comprehensive safety constraints and real-time communication.
+The Telearm telemanipulation system enables real-time control of a 5-DOF robot arm using IMU-tracked operator arm movements. The system implements velocity-based Jacobian mapping with comprehensive safety constraints and real-time communication, supporting both WiFi and Bluetooth modes.
 
 ## System Architecture
 
 ```
-┌─────────────────┐    Wi-Fi UDP     ┌─────────────────┐    Serial     ┌─────────────────┐
-│   ESP32 + IMUs  │ ──────────────── │  Raspberry Pi   │ ──────────── │    Arduino      │
-│  (Operator)     │   100 Hz         │  (Controller)   │              │   (Servos)      │
-└─────────────────┘                  └─────────────────┘              └─────────────────┘
+┌─────────────────┐    WiFi UDP /     ┌─────────────────┐    Serial     ┌─────────────────┐
+│   ESP32 + IMUs  │ ── Bluetooth ──→ │  Raspberry Pi   │ ──────────── │    Arduino      │
+│  (Operator)     │    SPP            │  (Controller)   │              │   (Servos)      │
+└─────────────────┘                   └─────────────────┘              └─────────────────┘
 ```
 
 ### Components
 
-1. **ESP32 Operator Tracker**: Reads 3× MPU-9250 IMUs, fuses data, transmits pose via UDP
+1. **ESP32 Operator Tracker**: Reads 3× MPU-9250 IMUs, fuses data, transmits pose via WiFi UDP or Bluetooth SPP
 2. **Raspberry Pi Controller**: Receives operator data, maps to robot velocities, enforces safety
 3. **Arduino Servo Driver**: Controls 5 servos with watchdog and emergency stop
+
+### Communication Modes
+
+- **WiFi Mode**: ESP32 → WiFi UDP → Raspberry Pi → USB Serial → Arduino
+- **Bluetooth Mode**: ESP32 → Bluetooth SPP → Raspberry Pi → USB Serial → Arduino
 
 ## Hardware Setup
 
@@ -44,10 +49,8 @@ GND          →    GND
 - IMU 2 (0x68): Hand
 
 **Network Configuration:**
-- SSID: `TelearmNetwork`
-- Password: `telearm123`
-- Target IP: `192.168.1.100` (Raspberry Pi)
-- UDP Port: `5000`
+- **WiFi Mode**: SSID: `TelearmNetwork`, Password: `telearm123`, Target IP: `192.168.1.100`, UDP Port: `5000`
+- **Bluetooth Mode**: Device name: `TelearmOperator`, Serial port: `/dev/rfcomm0`, Baud rate: `115200`
 
 ### Raspberry Pi Setup
 
@@ -241,7 +244,7 @@ python -c "from telearm.network.receiver import test_receiver; test_receiver()"
 
 **Test IMU Fusion:**
 ```bash
-python -c "from telearm.imu_fusion import test_imu_fusion; test_imu_fusion()"
+python -c "from telearm.sensors import create_mock_teleop_packet; print('Mock packet created:', create_mock_teleop_packet())"
 ```
 
 **Test Velocity Mapping:**
@@ -277,11 +280,11 @@ pytest tests/test_teleoperation.py -v
 
 ```
 telearm/
-├── sensors.py              # IMU data structures
-├── imu_fusion.py          # Sensor fusion algorithms
+├── sensors.py              # Sensor data structures and mock data
 ├── network/
 │   ├── protocol.py        # Network packet format
-│   └── receiver.py        # UDP receiver
+│   ├── receiver.py        # UDP receiver factory
+│   └── bluetooth_receiver.py # Bluetooth receiver
 ├── teleoperation/
 │   ├── mapper.py          # Velocity mapping
 │   ├── integrator.py      # Velocity integration
