@@ -1,14 +1,17 @@
 [Unit]
-Description=Telearm Bluetooth Serial Binding
-After=bluetooth.service
-Requires=bluetooth.service
+Description=Telearm Bluetooth RFCOMM Bind Service
+After=bluetooth.target
 
 [Service]
-Type=oneshot
-ExecStart=/usr/bin/rfcomm bind /dev/rfcomm0 %i 1
-ExecStop=/usr/bin/rfcomm release /dev/rfcomm0
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/rfcomm bind 0 <ESP32_MAC_ADDRESS> 1
+ExecStop=/usr/bin/rfcomm release 0
 RemainAfterExit=yes
-User=root
+Type=simple
 
 [Install]
 WantedBy=multi-user.target
+
+# Note: Replace <ESP32_MAC_ADDRESS> with actual ESP32 MAC address
+# ESP32 uses fixed RFCOMM channel 1 for compatibility
+# Run: sudo bluetoothctl devices to find ESP32 MAC address

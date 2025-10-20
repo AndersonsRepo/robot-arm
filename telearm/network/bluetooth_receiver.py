@@ -128,43 +128,55 @@ class BluetoothOperatorDataReceiver:
         """Main receive loop running in background thread."""
         print("Bluetooth serial receive loop started")
         
+        # Accumulate bytes and parse fixed-size frames
+        rx_buf = bytearray()
+        
         while self.running:
             try:
-                # Read exactly 40 bytes (packet size)
-                data = self.serial.read(40)
-                
-                if len(data) == 40:
-                    # Unpack packet
-                    packet = self.protocol.unpack_packet(data)
-                    if packet is None:
-                        continue
-                    
-                    # Update connection status
-                    self.last_packet_time = time.time()
-                    was_connected = self.is_connected
-                    self.is_connected = True
-                    
-                    # Add to buffer
-                    with self.lock:
-                        self.packet_buffer.append(packet)
-                    
-                    # Call packet callback
-                    if self.packet_callback:
-                        try:
-                            self.packet_callback(packet)
-                        except Exception as e:
-                            print(f"Packet callback error: {e}")
-                    
-                    # Debug output
-                    if packet.sequence % 100 == 0:
-                        stats = self.get_stats()
-                        print(f"Received packet {packet.sequence}, "
-                              f"latency: {stats.latency_ms:.1f}ms, "
-                              f"lost: {stats.packets_lost}")
-                
-                elif len(data) > 0:
-                    # Partial packet - this shouldn't happen with fixed 40-byte packets
-                    print(f"Warning: Received partial packet of {len(data)} bytes")
+                # Read up to N bytes; may be 0..N depending on timeout
+                data = self.serial.read(1024)
+                if data:
+                    rx_buf.extend(data)
+                    # Parse as many full packets as available
+                    while len(rx_buf) >= self.protocol.PACKET_SIZE:
+                        chunk = bytes(rx_buf[:self.protocol.PACKET_SIZE])
+                        del rx_buf[:self.protocol.PACKET_SIZE]
+
+                        packet = self.protocol.unpack_packet(chunk)
+                        if packet is None:
+                            continue
+
+                        # Mark connection alive
+                        self.last_packet_time = time.time()
+                        self.is_connected = True
+
+                        # Buffer packet
+                        with self.lock:
+                            self.packet_buffer.append(packet)
+
+                        # Callback (best-effort)
+                        if self.packet_callback:
+                            try:
+                                self.packet_callback(packet)
+                            except Exception as cb_err:
+                                print(f"Packet callback error: {cb_err}")
+
+                        # Debug every 100 seq
+                        if packet.sequence % 100 == 0:
+                            stats = self.get_stats()
+                            print(f"Received packet {packet.sequence}, "
+                                  f"latency: {stats.latency_ms:.1f}ms, "
+                                  f"lost: {stats.packets_lost}")
+                else:
+                    # Idle: check watchdog similar to UDP receiver
+                    if self.is_connected and not self.is_connection_alive():
+                        self.is_connected = False
+                        if self.timeout_callback:
+                            try:
+                                self.timeout_callback()
+                            except Exception as to_err:
+                                print(f"Timeout callback error: {to_err}")
+                        print("Connection timeout - no packets received")
                 
             except serial.SerialException as e:
                 # Handle disconnection

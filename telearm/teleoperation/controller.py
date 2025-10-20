@@ -50,13 +50,7 @@ class TeleopController:
         self.integrator = VelocityIntegrator(self.robot_model, dt=1.0/self.config['update_rate_hz'])
         
         # Network receiver - use factory for mode selection
-        if use_mock:
-            self.receiver = MockOperatorDataReceiver(
-                port=self.config.get('port', 5000),
-                buffer_size=10
-            )
-        else:
-            self.receiver = create_receiver(self.config)
+        self.receiver = create_receiver(self.config, use_mock=use_mock)
         
         # Hardware driver
         self.driver = self._create_driver()

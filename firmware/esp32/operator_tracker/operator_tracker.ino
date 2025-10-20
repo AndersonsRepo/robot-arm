@@ -211,10 +211,12 @@ void setupBluetooth() {
   Serial.print("Initializing Bluetooth: ");
   Serial.println(bluetoothDeviceName);
   
-  SerialBT.begin(bluetoothDeviceName);
+  // Initialize Bluetooth with fixed RFCOMM channel 1
+  SerialBT.begin(bluetoothDeviceName, true);  // true = isMaster=false (slave mode)
   
   Serial.println("Bluetooth device ready for pairing");
   Serial.println("Device name: TelearmOperator");
+  Serial.println("RFCOMM channel: 1");
   Serial.println("Waiting for connection...");
 }
 #endif

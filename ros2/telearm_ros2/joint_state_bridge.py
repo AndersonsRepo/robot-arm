@@ -42,9 +42,9 @@ class JointStateBridge(Node):
             q_sol = self.robot_model.inverse_kinematics(T_interp, q)
             if q_sol is not None:
                 self.q_traj.append(q_sol)
+                q = q_sol  # Warm-start next iteration with latest solution
             else:
                 self.q_traj.append(q)  # Keep previous solution if IK fails
-                q = self.q_traj[-1]
         
         self.get_logger().info(f"Generated {len(self.q_traj)} trajectory waypoints")
         self.idx = 0

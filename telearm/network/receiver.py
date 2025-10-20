@@ -307,16 +307,23 @@ def test_receiver():
     print("UDP receiver test completed")
 
 
-def create_receiver(config: dict):
+def create_receiver(config: dict, use_mock: bool = False):
     """
     Create appropriate receiver based on configuration.
     
     Args:
         config: Configuration dictionary containing mode and connection settings
+        use_mock: If True, return MockOperatorDataReceiver regardless of mode
         
     Returns:
-        OperatorDataReceiver or BluetoothOperatorDataReceiver instance
+        OperatorDataReceiver, BluetoothOperatorDataReceiver, or MockOperatorDataReceiver instance
     """
+    if use_mock:
+        return MockOperatorDataReceiver(
+            port=config.get('port', 5000),
+            buffer_size=config.get('buffer_size', 10)
+        )
+    
     mode = config.get('mode', 'wifi').lower()
     
     if mode == 'bluetooth':
