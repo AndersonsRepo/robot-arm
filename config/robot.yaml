@@ -7,36 +7,36 @@ joints:
     home: 0.0
     limit_min: -180.0  # degrees
     limit_max: 180.0
-    max_vel: 90.0      # deg/s
-    max_acc: 180.0     # deg/s^2
+    max_vel: 859.4     # deg/s
+    max_acc: 286.5     # deg/s^2
     
   - name: "base_pitch"
     home: 0.0
     limit_min: -90.0
     limit_max: 90.0
-    max_vel: 90.0
-    max_acc: 180.0
+    max_vel: 859.4
+    max_acc: 286.5
     
   - name: "elbow"
     home: 0.0
     limit_min: -135.0
     limit_max: 135.0
-    max_vel: 90.0
-    max_acc: 180.0
+    max_vel: 859.4
+    max_acc: 286.5
     
   - name: "wrist_pitch"
     home: 0.0
     limit_min: -135.0
     limit_max: 135.0
-    max_vel: 90.0
-    max_acc: 180.0
+    max_vel: 859.4
+    max_acc: 286.5
     
   - name: "wrist_roll"
     home: 0.0
     limit_min: -180.0
     limit_max: 180.0
-    max_vel: 90.0
-    max_acc: 180.0
+    max_vel: 1145.9
+    max_acc: 286.5
 
 dh_parameters:
   convention: "standard"  # or "modified"
