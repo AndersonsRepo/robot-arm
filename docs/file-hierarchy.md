@@ -11,6 +11,7 @@ robot-arm/
 ├── requirements.txt                    # Python dependencies
 ├── Makefile                           # Build and development commands
 ├── pull-request-message.md            # PR template for GitHub
+├── pull-request-startup-scripts.md     # PR message for startup scripts
 │
 ├── config/                            # Configuration files
 │   ├── robot.yaml                     # Robot model parameters
@@ -80,9 +81,11 @@ robot-arm/
 ├── examples/                          # Example scripts
 │   └── smoke_test.py                  # Basic functionality test
 │
-├── scripts/                           # Setup and automation scripts // look here for when it not seting up right also it should you bash
+├── scripts/                           # Setup and automation scripts
+│   ├── start_telearm.sh              # Unified startup script for all modes
 │   ├── setup_bluetooth_pi.sh         # Raspberry Pi Bluetooth setup
-│   └── telearm-bluetooth.service     # Systemd service for Bluetooth // why not just make one and call it set up 
+│   ├── telearm-bluetooth.service     # Systemd service for Bluetooth
+│   └── scripts-doc.md               # Comprehensive scripts documentation 
 │
 ├── ros2/                              # ROS 2 integration (optional)
 │   ├── __init__.py
@@ -431,7 +434,47 @@ Build Artifacts (generated)
 ├── htmlcov/                           # Coverage HTML reports
 └── __pycache__/                       # Python bytecode cache
 
-Development Tools
+## Scripts Structure (`scripts/`)
+
+```
+scripts/
+├── start_telearm.sh                      # Unified startup script
+│   ├── Multi-mode support                # WiFi, Bluetooth, Simulation
+│   ├── Automatic dependency checking      # Install missing packages
+│   ├── Configuration validation          # Validate all config files
+│   ├── Bluetooth setup integration       # Calls setup_bluetooth_pi.sh
+│   ├── ROS2 visualization support        # Optional --rviz flag
+│   ├── Verbose logging                   # --verbose flag for debugging
+│   ├── Signal handling                   # Graceful shutdown and cleanup
+│   └── Help system                       # --help flag with usage
+│
+├── setup_bluetooth_pi.sh                # Bluetooth pairing automation
+│   ├── Device scanning                   # Automatic ESP32 detection
+│   ├── MAC address detection             # Extract ESP32 MAC address
+│   ├── Pairing and trust                 # Establish Bluetooth connection
+│   ├── Serial port binding              # Create /dev/rfcomm0
+│   ├── Permission setting                # Set proper file permissions
+│   └── Connection testing                # Validate Bluetooth connection
+│
+├── telearm-bluetooth.service            # Systemd service for Bluetooth
+│   ├── Automatic startup                # Start after Bluetooth service
+│   ├── Persistent connection            # Maintain Bluetooth binding
+│   ├── Clean shutdown                   # Proper service termination
+│   └── Service management               # Enable/disable/status commands
+│
+└── scripts-doc.md                       # Comprehensive scripts documentation
+    ├── Script inventory                 # Complete list of all scripts
+    ├── Usage examples                   # Command-line examples
+    ├── Interaction diagrams             # How scripts work together
+    ├── Troubleshooting guide            # Common issues and solutions
+    ├── Security considerations         # Best practices and permissions
+    ├── Performance optimization         # Resource usage and tips
+    └── Maintenance procedures           # Updates and monitoring
+```
+
+## Development Tools
+
+```
 ├── Makefile                           # Build commands
 │   ├── install                        # Install package
 │   ├── dev                            # Install dev dependencies
