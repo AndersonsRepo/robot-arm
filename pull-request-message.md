@@ -4,6 +4,16 @@
 
 This PR implements comprehensive dual-mode communication support for the Telearm teleoperation system, allowing operators to choose between WiFi UDP and Bluetooth Classic SPP for wireless communication. The system maintains full backward compatibility while adding new Bluetooth capabilities.
 
+## 🔧 Critical Fixes Included
+
+This PR also includes several critical fixes that were identified during development:
+
+- **ROS2 Package Metadata**: Updated maintainer email to `fullerton.cs.club@gmail.com`
+- **IK Warm-Starting**: Fixed inverse kinematics convergence in ROS2 bridge
+- **RFCOMM Channel Mismatch**: Resolved Bluetooth channel conflicts between ESP32 and systemd service
+- **Serial Buffering**: Implemented proper frame parsing to eliminate data loss
+- **Receiver Factory**: Centralized receiver creation for better maintainability
+
 ## 🎯 Key Features Added
 
 ### ✨ Dual Communication Modes
@@ -40,6 +50,8 @@ This PR implements comprehensive dual-mode communication support for the Telearm
 ### 🆕 New Files Added
 - `docs/bluetooth-setup.md` - Comprehensive Bluetooth setup guide
 - `docs/program-overview.md` - Complete system overview and troubleshooting
+- `docs/data-hierarchy.md` - Data flow and structure documentation
+- `docs/file-hierarchy.md` - Complete file organization guide
 - `telearm/network/bluetooth_receiver.py` - Bluetooth serial receiver implementation
 - `tests/test_bluetooth.py` - Bluetooth component unit tests
 - `scripts/setup_bluetooth_pi.sh` - Automated Raspberry Pi Bluetooth pairing
@@ -48,13 +60,17 @@ This PR implements comprehensive dual-mode communication support for the Telearm
 - `progress-doc-wifi/cleanup-summary.md` - Cleanup documentation
 
 ### 🔄 Files Modified
-- `firmware/esp32/operator_tracker/operator_tracker.ino` - Added Bluetooth support
+- `firmware/esp32/operator_tracker/operator_tracker.ino` - Added Bluetooth support with fixed RFCOMM channel
 - `config/teleop.yaml` - Added mode selection and Bluetooth configuration
 - `telearm/cli.py` - Added mode selection CLI arguments
-- `telearm/network/receiver.py` - Added receiver factory function
-- `telearm/teleoperation/controller.py` - Updated to use receiver factory
+- `telearm/network/receiver.py` - Added receiver factory function with mock support
+- `telearm/network/bluetooth_receiver.py` - Fixed serial buffering with proper frame parsing
+- `telearm/teleoperation/controller.py` - Updated to use centralized receiver factory
 - `README.md` - Updated with dual-mode information
-- `ros2/telearm_ros2/joint_state_bridge.py` - Updated to current API
+- `docs/setup.md` - Complete setup guide with hardware assembly instructions
+- `ros2/package.xml` - Updated maintainer email to fullerton.cs.club@gmail.com
+- `ros2/telearm_ros2/joint_state_bridge.py` - Fixed IK warm-starting and updated to current API
+- `scripts/telearm-bluetooth.service` - Fixed RFCOMM channel configuration
 - `tests/test_teleoperation.py` - Removed outdated IMU fusion tests
 
 ### 🗑️ Files Removed
@@ -135,13 +151,16 @@ python3 -m telearm.cli teleop --mode bluetooth --bt-port /dev/rfcomm1
 ## 📚 Documentation Updates
 
 ### New Documentation
-- **Bluetooth Setup Guide**: Complete setup and troubleshooting
-- **Program Overview**: Comprehensive system architecture and troubleshooting
-- **WiFi Instructions**: Detailed WiFi configuration guide
-- **Cleanup Summary**: Complete audit trail of changes
+- **Bluetooth Setup Guide**: Complete setup and troubleshooting (`docs/bluetooth-setup.md`)
+- **Program Overview**: Comprehensive system architecture and troubleshooting (`docs/program-overview.md`)
+- **Data Hierarchy**: Complete data flow and structure documentation (`docs/data-hierarchy.md`)
+- **File Hierarchy**: Complete file organization guide (`docs/file-hierarchy.md`)
+- **WiFi Instructions**: Detailed WiFi configuration guide (`progress-doc-wifi/wifi-instructions.md`)
+- **Cleanup Summary**: Complete audit trail of changes (`progress-doc-wifi/cleanup-summary.md`)
 
 ### Updated Documentation
 - **README.md**: Updated with dual-mode architecture
+- **Setup Guide**: Complete hardware assembly and configuration instructions (`docs/setup.md`)
 - **Progress Docs**: Updated to reflect current system capabilities
 - **ROS2 Integration**: Updated to use current teleoperation API
 
