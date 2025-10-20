@@ -80,15 +80,15 @@ robot-arm/
 ├── examples/                          # Example scripts
 │   └── smoke_test.py                  # Basic functionality test
 │
-├── scripts/                           # Setup and automation scripts
+├── scripts/                           # Setup and automation scripts // look here for when it not seting up right also it should you bash
 │   ├── setup_bluetooth_pi.sh         # Raspberry Pi Bluetooth setup
-│   └── telearm-bluetooth.service     # Systemd service for Bluetooth
+│   └── telearm-bluetooth.service     # Systemd service for Bluetooth // why not just make one and call it set up 
 │
 ├── ros2/                              # ROS 2 integration (optional)
 │   ├── __init__.py
 │   ├── package.xml                    # ROS 2 package metadata
 │   ├── setup.cfg                      # ROS 2 setup configuration
-│   ├── setup.py                       # ROS 2 package setup
+│   ├── setup.py                       # ROS 2 package setup // but then we have set up here on the ros2 which is the py system
 │   │
 │   ├── launch/                        # ROS 2 launch files
 │   │   └── telearm_rviz.launch.py     # RViz visualization launch
@@ -281,7 +281,7 @@ firmware/
 ├── arduino/                           # Arduino Uno firmware
 │   └── telearm_driver/
 │       └── telearm_driver.ino         # Servo control firmware
-│           ├── setup()                # Initialize servos and serial
+│           ├── setup()                # Initialize servos and serial // overloaded operators
 │           ├── loop()                 # Main control loop
 │           ├── parseCommand()         # Parse incoming commands
 │           ├── moveServo()            # Move individual servo
@@ -291,7 +291,7 @@ firmware/
 └── esp32/                             # ESP32 operator tracker firmware
     └── operator_tracker/
         └── operator_tracker.ino       # IMU fusion and communication
-            ├── setup()                # Initialize IMUs and communication
+            ├── setup()                # Initialize IMUs and communication // overloaded operators
             ├── loop()                 # Main control loop
             ├── initializeIMUs()       # Initialize MPU-9250 sensors
             ├── connectToWiFi()        # Connect to WiFi network
