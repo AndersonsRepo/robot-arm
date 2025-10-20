@@ -250,7 +250,7 @@ config/
 │   │   ├── timeout_ms: 200            # Connection timeout
 │   │   ├── port: 5000                 # WiFi UDP port
 │   │   └── bluetooth:                 # Bluetooth settings
-│   │       ├── port: "/dev/rfcomm0"   # Bluetooth serial port
+│   │       ├── port: "/dev/rfcomm0"   # Bluetooth serial port/////////////////////////////////////////////////////////////////////////////////////////error/////////////////////////////////////////////////////////////
 │   │       └── baud_rate: 115200      # Bluetooth baud rate
 │   │   ├── mapping:                   # Mapping configuration
 │   │   │   ├── type: "velocity_based" # Mapping type
