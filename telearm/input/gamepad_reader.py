@@ -94,6 +94,9 @@ class GamepadReader:
     
     def _initialize(self):
         """Initialize the gamepad device."""
+        if self.device_path == "pygame":
+            self.use_evdev = False
+
         if self.use_evdev and self.device_path and self.device_path != "pygame":
             try:
                 self.device = InputDevice(self.device_path)
@@ -115,7 +118,6 @@ class GamepadReader:
                 print(f"Using pygame gamepad: {self.device.get_name()}")
             else:
                 raise RuntimeError("No gamepad detected")
-    
     def start(self):
         """Start reading gamepad input in background thread."""
         if self.running:
