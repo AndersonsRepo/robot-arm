@@ -22,8 +22,10 @@ exclude = ["tests*", "docs*", "config*", "firmware*", "ros2*", "cpp*", "examples
 
 [project.optional-dependencies]
 hardware = ["pyserial>=3.5"]
-teleop = ["pyserial>=3.5", "scipy>=1.7.0", "evdev>=1.4.0"]
-ros2 = ["rclpy"]
+teleop = ["pyserial>=3.5", "scipy>=1.7.0", "evdev>=1.4.0", "pygame>=2.0.0"]
+# Note: rclpy is NOT available via pip - it's a ROS2 system package
+# Install ROS2 first, then rclpy will be available via ROS2's package manager
+# ros2 = ["rclpy"]  # Disabled - use ROS2 system packages instead
 dev = [
     "pytest>=7.0",
     "pytest-cov",

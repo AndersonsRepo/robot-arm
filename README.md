@@ -186,15 +186,21 @@ See [Setup Guide](docs/setup.md) for detailed instructions.
 
 ## ROS 2 Integration (Optional)
 
+**Note:** ROS2 packages (including `rclpy`) are NOT installed via pip. They must be installed via ROS2's system package manager.
+
 ```bash
-# Install core telearm first
+# 1. Install ROS2 first (if not already installed)
+# Ubuntu/Debian: Follow ROS2 installation guide
+# https://docs.ros.org/en/humble/Installation.html
+
+# 2. Install core telearm
 pip install -e .
 
-# Build ROS 2 package
-cd ros2/telearm_ros2
+# 3. Build ROS 2 package
+cd ros2
 colcon build --packages-select telearm_ros2
 
-# Launch visualization
+# 4. Launch visualization
 ros2 launch telearm_ros2 telearm_rviz.launch.py
 ```
 
