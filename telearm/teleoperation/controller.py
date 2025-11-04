@@ -264,15 +264,26 @@ class PositionController:
                 self.smoothed_q = (self.joint_smoothing_alpha * q_target + 
                                    (1 - self.joint_smoothing_alpha) * self.smoothed_q)
                 
-                # Safety checks
-                is_safe, q_safe, status_msg = self.safety.comprehensive_safety_check(
-                    self.smoothed_q, np.zeros(self.robot_model.n()),  # No velocity for now
-                    np.zeros(self.robot_model.n()), dt
-                )
+                # Safety checks for position-based control
+                # Clamp joint angles to limits
+                q_safe = self.smoothed_q.copy()
+                for i, (angle, joint_spec) in enumerate(zip(q_safe, self.robot_model.joints)):
+                    q_safe[i] = np.clip(angle, joint_spec.limit.min, joint_spec.limit.max)
                 
-                if not is_safe:
+                # Check workspace
+                T_ee = self.kin.fk(q_safe)
+                if not self.safety.check_workspace(T_ee):
                     self.stats['safety_violations'] += 1
-                    print(f"Safety violation: {status_msg}")
+                    print(f"Safety violation: End-effector outside workspace")
+                    continue
+                
+                # Check emergency conditions (pass zero velocities since we're position-based)
+                is_emergency, emergency_reason = self.safety.check_emergency_conditions(
+                    q_safe, np.zeros(self.robot_model.n())
+                )
+                if is_emergency:
+                    self.stats['safety_violations'] += 1
+                    print(f"Safety violation: {emergency_reason}")
                     continue
                 
                 # Update current joint state
