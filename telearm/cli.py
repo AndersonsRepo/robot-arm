@@ -6,7 +6,6 @@ from pathlib import Path
 
 from . import load_from_config, NullServoDriver, MotionController
 from .drivers import SerialServoDriver
-from .teleoperation.controller import TeleopController
 
 
 def create_controller(args):
@@ -124,43 +123,24 @@ def cmd_calibrate(args):
     print("Calibration completed")
 
 
-def cmd_teleop(args):
-    """Start teleoperation mode."""
+def cmd_run(args):
+    """Run gamepad control loop."""
     import signal
     import time
-    import yaml
     
-    print("Starting teleoperation mode...")
+    print("Starting gamepad control mode...")
     print("Press Ctrl+C to stop")
     
-    # Load config and apply CLI overrides
-    config = {}
-    try:
-        with open(args.config, 'r') as f:
-            config = yaml.safe_load(f)
-    except Exception as e:
-        print(f"Warning: Could not load config from {args.config}: {e}")
+    from .teleoperation.controller import PositionController
     
-    # Apply CLI overrides
-    if args.mode:
-        config['mode'] = args.mode
-        print(f"Mode override: {args.mode}")
-    
-    if args.bt_port and args.mode == 'bluetooth':
-        if 'bluetooth' not in config:
-            config['bluetooth'] = {}
-        config['bluetooth']['port'] = args.bt_port
-        print(f"Bluetooth port override: {args.bt_port}")
-    
-    # Create teleoperation controller with modified config
-    controller = TeleopController(
+    # Create position-based controller
+    controller = PositionController(
         config_path=args.config,
-        use_mock=args.mock,
-        config_override=config
+        use_sim=args.sim
     )
     
     def signal_handler(sig, frame):
-        print("\nStopping teleoperation...")
+        print("\nStopping controller...")
         controller.stop()
         sys.exit(0)
     
@@ -178,16 +158,87 @@ def cmd_teleop(args):
             # Print status every 10 seconds
             if int(time.time()) % 10 == 0:
                 status = controller.get_status()
-                print(f"Status: packets={status['packets_received']}, "
-                      f"processed={status['packets_processed']}, "
-                      f"connection={'OK' if status['connection_alive'] else 'TIMEOUT'}")
+                print(f"Status: IK={status['ik_solves']}, "
+                      f"failures={status['ik_failures']}, "
+                      f"packets={status['packets_sent']}, "
+                      f"scale={status['motion_scale']:.2f}")
     
     except KeyboardInterrupt:
-        print("\nTeleoperation stopped by user")
+        print("\nController stopped by user")
     except Exception as e:
-        print(f"Teleoperation error: {e}")
+        print(f"Controller error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         controller.stop()
+
+
+def cmd_teleop(args):
+    """Start teleoperation mode (gamepad)."""
+    # Alias for cmd_run for backward compatibility
+    cmd_run(args)
+
+
+def cmd_demo(args):
+    """Run pre-programmed demo trajectory."""
+    print("Running demo trajectory...")
+    
+    from . import load_from_config
+    from .control import MotionController
+    from .drivers import NullServoDriver
+    import numpy as np
+    import time
+    
+    model = load_from_config()
+    
+    if args.sim:
+        driver = NullServoDriver(model.n())
+        ctrl = MotionController(model, driver)
+        
+        # Demo: Move to a few waypoints using joint angles
+        waypoints = [
+            np.array([0.0, 0.0, 0.0, 0.0, 0.0]),  # Home
+            np.array([0.5, 0.2, 0.0, 0.0, 0.0]),  # Extended
+            np.array([0.3, 0.1, -0.3, 0.1, 0.0]),  # Curved
+            np.array([0.0, 0.0, 0.0, 0.0, 0.0]),  # Back home
+        ]
+        
+        print("Moving through demo waypoints...")
+        for i, waypoint in enumerate(waypoints):
+            print(f"Waypoint {i+1}/{len(waypoints)}")
+            for j, angle in enumerate(waypoint):
+                driver.move_to(j, angle)
+            time.sleep(2.0)
+    else:
+        from .drivers.serial_esp32 import ESP32SerialDriver
+        esp32_config = {"default_port": args.port or "/dev/ttyUSB0", "baud_rate": 115200, "timeout": 0.3}
+        driver = ESP32SerialDriver(
+            port=esp32_config["default_port"],
+            baud=esp32_config["baud_rate"],
+            timeout=esp32_config["timeout"],
+            num_joints=model.n()
+        )
+        if not driver.connect():
+            print("Failed to connect to ESP32")
+            return
+        
+        # Demo: Move to a few waypoints using joint angles
+        waypoints = [
+            [0.0, 0.0, 0.0, 0.0, 0.0],  # Home
+            [30.0, 20.0, 0.0, 0.0, 0.0],  # Extended (degrees)
+            [20.0, 10.0, -20.0, 10.0, 0.0],  # Curved
+            [0.0, 0.0, 0.0, 0.0, 0.0],  # Back home
+        ]
+        
+        print("Moving through demo waypoints...")
+        for i, waypoint in enumerate(waypoints):
+            print(f"Waypoint {i+1}/{len(waypoints)}")
+            driver.send_joint_targets(waypoint)
+            time.sleep(2.0)
+        
+        driver.disconnect()
+    
+    print("Demo complete")
 
 
 def main():
@@ -217,16 +268,24 @@ def main():
     # Calibrate command
     subparsers.add_parser("calibrate", help="Run calibration routine")
     
-    # Teleop command
-    teleop_parser = subparsers.add_parser("teleop", help="Start teleoperation mode")
-    teleop_parser.add_argument("--config", default="config/teleop.yaml", 
+    # Run command (gamepad control)
+    run_parser = subparsers.add_parser("run", help="Run gamepad control loop")
+    run_parser.add_argument("--config", default="config/teleop.yaml",
+                           help="Teleoperation config file")
+    run_parser.add_argument("--sim", action="store_true",
+                           help="Use simulation mode (no hardware)")
+    
+    # Demo command
+    demo_parser = subparsers.add_parser("demo", help="Run pre-programmed demo trajectory")
+    demo_parser.add_argument("--sim", action="store_true",
+                            help="Use simulation mode (no hardware)")
+    
+    # Teleop command (alias for run, for backward compatibility)
+    teleop_parser = subparsers.add_parser("teleop", help="Start gamepad teleoperation (alias for run)")
+    teleop_parser.add_argument("--config", default="config/teleop.yaml",
                               help="Teleoperation config file")
-    teleop_parser.add_argument("--mock", action="store_true", 
-                              help="Use mock operator data (for testing)")
-    teleop_parser.add_argument("--mode", choices=["wifi", "bluetooth"], 
-                              help="Communication mode (overrides config)")
-    teleop_parser.add_argument("--bt-port", default="/dev/rfcomm0",
-                              help="Bluetooth serial port")
+    teleop_parser.add_argument("--sim", action="store_true",
+                              help="Use simulation mode (no hardware)")
     
     args = parser.parse_args()
     
@@ -241,6 +300,10 @@ def main():
             cmd_status(args)
         elif args.command == "calibrate":
             cmd_calibrate(args)
+        elif args.command == "run":
+            cmd_run(args)
+        elif args.command == "demo":
+            cmd_demo(args)
         elif args.command == "teleop":
             cmd_teleop(args)
         else:

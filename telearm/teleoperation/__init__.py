@@ -1,5 +1,6 @@
-"""
-Teleoperation module for robot arm control.
+"""Teleoperation control modules."""
+from .controller import PositionController
 
-Implements velocity-based mapping from operator arm to robot arm.
-"""
+__all__ = ['PositionController']
+
+

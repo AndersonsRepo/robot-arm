@@ -1,23 +1,39 @@
 teleoperation:
-  mode: "wifi"  # Communication mode: "wifi" or "bluetooth"
-  velocity_scale: 0.6  # Robot moves at 60% operator speed
+  mode: "gamepad"  # Communication mode: "gamepad"
   update_rate_hz: 100  # Control loop frequency
-  timeout_ms: 200      # Watchdog timeout
+  timeout_ms: 300      # ESP32 watchdog timeout (ms)
   
-  # WiFi settings (for mode: "wifi")
-  port: 5000           # UDP port for WiFi communication
-  
-  # Bluetooth settings (for mode: "bluetooth")
-  bluetooth:
-    port: "/dev/rfcomm0"  # Bluetooth serial port
-    baud_rate: 115200     # Serial baud rate
-  
-  mapping:
-    type: "velocity_based"
-    null_space_gain: 0.1  # Bias toward home in null space
+  gamepad:
+    device: "/dev/input/js0"  # Gamepad device path (or "auto" for auto-detect)
+    deadzone: 0.1  # Deadzone for stick axes (0.0-1.0)
+    gains:
+      xy_scale: 0.05  # m/s per unit stick deflection (left stick XY)
+      z_scale: 0.05   # m/s per unit stick deflection (right stick Y)
+      roll_scale: 0.5  # rad/s per unit stick deflection (right stick X)
+    mapping:
+      left_stick_x: "delta_x"    # Planar X motion
+      left_stick_y: "delta_y"    # Planar Y motion
+      right_stick_y: "delta_z"   # Vertical motion
+      right_stick_x: "wrist_roll"  # Wrist rotation
+      button_home: 0  # Home button index
+      button_park: 1  # Park button index
+      button_gripper_open: 2
+      button_gripper_close: 3
+      bumper_left: 4  # Decrease motion scale
+      bumper_right: 5  # Increase motion scale
+    
+  ik:
+    damping: 1e-4  # Damped least squares damping coefficient
+    max_iters: 200  # Maximum IK iterations
+    tol_pos: 1e-3   # Position tolerance (m)
+    tol_rot: 1e-2   # Rotation tolerance (rad)
+    
+  rates:
+    ik_hz: 50      # IK solve rate (Hz)
+    pwm_hz: 50     # PWM output rate on ESP32 (Hz)
     
   safety:
     enforce_joint_limits: true
     enforce_workspace: true
     soft_limit_margin_deg: 5.0
-    emergency_stop_pin: 13  # Arduino pin for E-stop
+    workspace_clamp: true  # Clamp workspace before IK
