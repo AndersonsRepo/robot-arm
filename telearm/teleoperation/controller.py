@@ -1,126 +1,188 @@
 """
-Main Teleoperation Controller
+Position-Based Teleoperation Controller
 
-Real-time teleoperation controller that coordinates all components:
-- Network receiver for operator data
-- Velocity mapping from operator to robot
-- Safety checking and constraints
-- Hardware control via servo drivers
+Main control loop that reads gamepad, performs IK, and sends joint targets to ESP32.
+Replaces velocity-based teleoperation with position-based IK control.
 """
 from __future__ import annotations
 import time
 import threading
 import yaml
-from typing import Dict, Any, Optional
 import numpy as np
+from typing import Dict, Any, Optional
+from pathlib import Path
 
-from ..models import load_from_config, load_operator_from_config
-from ..network.receiver import OperatorDataReceiver, MockOperatorDataReceiver, create_receiver
-from ..safety.checker import SafetyChecker, EmergencyStopHandler
-from ..teleoperation.mapper import VelocityMapper
-from ..teleoperation.integrator import VelocityIntegrator
-from ..drivers import SerialServoDriver, NullServoDriver
+from ..models import load_from_config
+from ..kinematics import Kinematics
+from ..ik import IK, IKOptions
+from ..input import GamepadReader, JoystickMapper
+from ..drivers import ESP32SerialDriver
+from ..safety.checker import SafetyChecker
+from ..homing import LimitSwitchHandler
 
 
-class TeleopController:
-    """Main teleoperation controller."""
+class PositionController:
+    """Position-based control controller using gamepad input and IK."""
     
-    def __init__(self, config_path: str = "config/teleop.yaml", use_mock: bool = False, config_override: Optional[Dict[str, Any]] = None):
+    def __init__(self, config_path: str = "config/teleop.yaml", use_sim: bool = False):
         """
-        Initialize teleoperation controller.
+        Initialize position-based controller.
         
         Args:
             config_path: Path to teleoperation configuration file
-            use_mock: Use mock receiver for testing without hardware
-            config_override: Optional config dictionary to override file settings
+            use_sim: Use simulation mode (no hardware writes)
         """
         # Load configurations
         self.config = self._load_config(config_path)
+        self.robot_config = self._load_robot_config()
+        self.pins_config = self._load_pins_config()
         
-        # Apply config overrides if provided
-        if config_override:
-            self.config.update(config_override)
+        # Robot model and kinematics
         self.robot_model = load_from_config()
-        self.operator_model = load_operator_from_config()
+        self.kin = Kinematics(self.robot_model)
         
-        # Initialize components
-        self.mapper = VelocityMapper(self.operator_model, self.robot_model, self.config)
-        self.safety = SafetyChecker(self.robot_model, self.config)
-        self.emergency_handler = EmergencyStopHandler(self.config)
-        self.integrator = VelocityIntegrator(self.robot_model, dt=1.0/self.config['update_rate_hz'])
+        # IK solver with configurable options
+        ik_opts = IKOptions(
+            max_iters=self.config['ik']['max_iters'],
+            tol_pos=self.config['ik']['tol_pos'],
+            tol_rot=self.config['ik']['tol_rot'],
+            lambda2=self.config['ik']['damping']
+        )
+        self.ik = IK(self.kin)
+        self.ik_opts = ik_opts
         
-        # Network receiver - use factory for mode selection
-        self.receiver = create_receiver(self.config, use_mock=use_mock)
+        # Input devices
+        gamepad_config = self.config['gamepad']
+        self.gamepad = GamepadReader(
+            device_path=gamepad_config.get('device', 'auto'),
+            deadzone=gamepad_config.get('deadzone', 0.1)
+        )
+        
+        workspace = self.robot_config.get('workspace', {})
+        self.joystick_mapper = JoystickMapper(gamepad_config, workspace)
         
         # Hardware driver
-        self.driver = self._create_driver()
+        self.use_sim = use_sim
+        if not use_sim:
+            esp32_config = self.pins_config['hardware']['esp32']
+            self.driver = ESP32SerialDriver(
+                port=esp32_config.get('default_port', '/dev/ttyUSB0'),
+                baud=esp32_config.get('baud_rate', 115200),
+                timeout=esp32_config.get('timeout', 0.3),
+                num_joints=self.robot_model.n()
+            )
+        else:
+            from ..drivers import NullServoDriver
+            self.driver = NullServoDriver(self.robot_model.n())
+        
+        # Safety and homing
+        self.safety = SafetyChecker(self.robot_model, self.config)
+        self.limit_switches = LimitSwitchHandler(self.pins_config, self.robot_model.n())
         
         # State
         self.robot_q = np.array([js.home for js in self.robot_model.joints])
-        self.robot_dq = np.zeros(self.robot_model.n())
+        self.target_pose = None
         self.is_running = False
         self.control_thread = None
         
+        # Smoothing filter for joint targets
+        self.joint_smoothing_alpha = 0.1  # Low-pass filter coefficient
+        self.smoothed_q = self.robot_q.copy()
+        
         # Statistics
         self.stats = {
-            'packets_received': 0,
-            'packets_processed': 0,
+            'ik_solves': 0,
+            'ik_failures': 0,
             'safety_violations': 0,
-            'start_time': None,
-            'last_packet_time': None
+            'packets_sent': 0,
+            'start_time': None
         }
-        
-        # Set up callbacks
-        self.receiver.set_packet_callback(self._on_packet_received)
-        self.receiver.set_timeout_callback(self._on_connection_timeout)
     
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """Load teleoperation configuration."""
+        full_path = Path(config_path)
+        if not full_path.is_absolute():
+            full_path = Path(__file__).parent.parent.parent / config_path
+        
+        try:
+            with open(full_path, 'r') as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            print(f"Warning: Could not load config from {config_path}: {e}")
+            return self._default_teleop_config()
+    
+    def _load_robot_config(self) -> Dict[str, Any]:
+        """Load robot configuration."""
+        try:
+            from ..models import load_robot_config
+            return load_robot_config()
+        except Exception as e:
+            print(f"Warning: Could not load robot config: {e}")
+            return {}
+    
+    def _load_pins_config(self) -> Dict[str, Any]:
+        """Load pins configuration."""
+        config_path = Path(__file__).parent.parent.parent / "config" / "pins.yaml"
         try:
             with open(config_path, 'r') as f:
                 return yaml.safe_load(f)
         except Exception as e:
-            print(f"Warning: Could not load config from {config_path}: {e}")
-            # Return default configuration
-            return {
-                'velocity_scale': 0.6,
-                'update_rate_hz': 100,
-                'timeout_ms': 200,
-                'mapping': {'null_space_gain': 0.1},
-                'safety': {
-                    'enforce_joint_limits': True,
-                    'enforce_workspace': True,
-                    'soft_limit_margin_deg': 5.0,
-                    'emergency_stop_pin': 13
-                }
-            }
+            print(f"Warning: Could not load pins config: {e}")
+            return {}
     
-    def _create_driver(self):
-        """Create appropriate servo driver."""
-        try:
-            # Try to create serial driver
-            return SerialServoDriver(
-                port="/dev/ttyUSB0",  # Default port
-                baud_rate=115200,
-                timeout=0.25
-            )
-        except Exception as e:
-            print(f"Warning: Could not create serial driver: {e}")
-            print("Using null driver for simulation")
-            return NullServoDriver()
+    def _default_teleop_config(self) -> Dict[str, Any]:
+        """Return default teleoperation configuration."""
+        return {
+            'mode': 'gamepad',
+            'update_rate_hz': 100,
+            'timeout_ms': 300,
+            'gamepad': {
+                'device': 'auto',
+                'deadzone': 0.1,
+                'gains': {'xy_scale': 0.05, 'z_scale': 0.05, 'roll_scale': 0.5},
+                'mapping': {}
+            },
+            'ik': {
+                'damping': 1e-4,
+                'max_iters': 200,
+                'tol_pos': 1e-3,
+                'tol_rot': 1e-2
+            },
+            'rates': {'ik_hz': 50, 'pwm_hz': 50},
+            'safety': {
+                'enforce_joint_limits': True,
+                'enforce_workspace': True,
+                'soft_limit_margin_deg': 5.0,
+                'workspace_clamp': True
+            }
+        }
     
     def start(self):
-        """Start the teleoperation controller."""
+        """Start the control loop."""
         if self.is_running:
             return
         
-        print("Starting teleoperation controller...")
+        print("Starting position-based controller...")
         
-        # Initialize integrator to current robot position
-        self.integrator.set_positions(self.robot_q)
+        # Initialize gamepad
+        try:
+            self.gamepad.start()
+        except Exception as e:
+            print(f"Failed to start gamepad: {e}")
+            raise
         
-        # Start network receiver
-        self.receiver.start()
+        # Initialize hardware driver
+        if not self.use_sim:
+            if not self.driver.connect():
+                print("Warning: Could not connect to ESP32, using simulation mode")
+                self.use_sim = True
+                from ..drivers import NullServoDriver
+                self.driver = NullServoDriver(self.robot_model.n())
+        
+        # Get initial pose from forward kinematics
+        T_init = self.kin.fk(self.robot_q)
+        pos_init = T_init[:3, 3]
+        self.joystick_mapper.reset_pose(pos_init, roll=0.0)
         
         # Start control loop
         self.is_running = True
@@ -128,28 +190,29 @@ class TeleopController:
         self.control_thread = threading.Thread(target=self._control_loop, daemon=True)
         self.control_thread.start()
         
-        print("Teleoperation controller started")
+        print("Position-based controller started")
     
     def stop(self):
-        """Stop the teleoperation controller."""
+        """Stop the control loop."""
         if not self.is_running:
             return
         
-        print("Stopping teleoperation controller...")
+        print("Stopping position-based controller...")
         
         self.is_running = False
         
-        # Stop receiver
-        self.receiver.stop()
+        # Stop gamepad
+        self.gamepad.stop()
         
-        # Wait for control thread to finish
+        # Disconnect driver
+        if hasattr(self.driver, 'disconnect'):
+            self.driver.disconnect()
+        
+        # Wait for control thread
         if self.control_thread and self.control_thread.is_alive():
             self.control_thread.join(timeout=2.0)
         
-        # Move to home position
-        self._go_home()
-        
-        print("Teleoperation controller stopped")
+        print("Position-based controller stopped")
     
     def _control_loop(self):
         """Main control loop running at specified rate."""
@@ -162,63 +225,74 @@ class TeleopController:
             loop_start = time.time()
             
             try:
-                # Get latest operator data
-                packet = self.receiver.get_latest()
-                if packet is None:
-                    self._handle_no_data()
-                    time.sleep(dt)
+                # Read gamepad state
+                gamepad_state = self.gamepad.get_state()
+                
+                # Update target pose from joystick
+                target_pose = self.joystick_mapper.update_from_gamepad(gamepad_state, dt)
+                self.target_pose = target_pose
+                
+                # Check button commands
+                buttons = self.joystick_mapper.get_buttons(gamepad_state)
+                if buttons['home']:
+                    self._execute_home()
+                    continue
+                if buttons['park']:
+                    self._execute_park()
                     continue
                 
-                # Update statistics
-                self.stats['packets_received'] += 1
-                self.stats['last_packet_time'] = time.time()
+                # Convert target pose to transformation matrix
+                T_target = self._pose_to_transform(target_pose)
                 
-                # Check emergency conditions
-                if self.emergency_handler.is_emergency_active():
-                    self._handle_emergency()
-                    time.sleep(dt)
-                    continue
+                # Workspace clamping (if enabled)
+                if self.config['safety'].get('workspace_clamp', True):
+                    T_target = self._clamp_workspace(T_target)
                 
-                # Update emergency handler watchdog
-                self.emergency_handler.update_command_time()
+                # Solve IK
+                q_target = self.ik.solve(self.robot_q, T_target, self.ik_opts)
                 
-                # Map operator velocities to robot velocities
-                robot_dq_desired = self.mapper.map_velocity(
-                    packet.operator_joints,
-                    packet.operator_velocities,
-                    self.robot_q
-                )
+                # Check IK convergence
+                T_actual = self.kin.fk(q_target)
+                pos_error = np.linalg.norm(T_target[:3, 3] - T_actual[:3, 3])
+                if pos_error > self.ik_opts.tol_pos * 10:  # Allow some tolerance
+                    self.stats['ik_failures'] += 1
+                    print(f"Warning: IK did not converge well (error: {pos_error:.4f}m)")
+                else:
+                    self.stats['ik_solves'] += 1
                 
-                # Apply safety checks
-                is_safe, robot_dq_safe, status_msg = self.safety.comprehensive_safety_check(
-                    self.robot_q, robot_dq_desired, self.robot_dq, dt
+                # Apply joint smoothing
+                self.smoothed_q = (self.joint_smoothing_alpha * q_target + 
+                                   (1 - self.joint_smoothing_alpha) * self.smoothed_q)
+                
+                # Safety checks
+                is_safe, q_safe, status_msg = self.safety.comprehensive_safety_check(
+                    self.smoothed_q, np.zeros(self.robot_model.n()),  # No velocity for now
+                    np.zeros(self.robot_model.n()), dt
                 )
                 
                 if not is_safe:
                     self.stats['safety_violations'] += 1
                     print(f"Safety violation: {status_msg}")
-                    self._handle_safety_violation()
-                    time.sleep(dt)
                     continue
                 
-                # Integrate velocities to positions
-                self.robot_q, self.robot_dq = self.integrator.integrate(robot_dq_safe)
+                # Update current joint state
+                self.robot_q = q_safe
                 
-                # Send commands to hardware
-                self._send_to_hardware()
-                
-                # Update statistics
-                self.stats['packets_processed'] += 1
-                
-                # Debug output
-                if self.stats['packets_processed'] % 100 == 0:
-                    print(f"Processed {self.stats['packets_processed']} packets, "
-                          f"status: {status_msg}, "
-                          f"joints: {np.rad2deg(self.robot_q)}")
+                # Send to hardware
+                joints_deg = np.rad2deg(q_safe).tolist()
+                if not self.use_sim:
+                    if self.driver.send_joint_targets(joints_deg):
+                        self.stats['packets_sent'] += 1
+                else:
+                    # Simulation: update null driver
+                    for i, angle in enumerate(q_safe):
+                        self.driver.move_to(i, angle)
+                    self.stats['packets_sent'] += 1
                 
             except Exception as e:
                 print(f"Control loop error: {e}")
-                self._handle_control_error()
+                import traceback
+                traceback.print_exc()
             
             # Timing
             elapsed = time.time() - loop_start
@@ -226,70 +300,63 @@ class TeleopController:
             if sleep_time > 0:
                 time.sleep(sleep_time)
             else:
-                # Control loop is running slower than desired
                 print(f"Warning: Control loop lagging by {abs(sleep_time)*1000:.1f}ms")
     
-    def _on_packet_received(self, packet):
-        """Callback for received packets."""
-        pass  # Handled in control loop
-    
-    def _on_connection_timeout(self):
-        """Callback for connection timeout."""
-        print("Connection timeout - no operator data received")
-        self._handle_no_data()
-    
-    def _handle_no_data(self):
-        """Handle case when no operator data is available."""
-        # Stop robot motion
-        self.robot_dq = np.zeros(self.robot_model.n())
-        self.integrator.set_positions(self.robot_q)
-    
-    def _handle_emergency(self):
-        """Handle emergency stop condition."""
-        print("EMERGENCY STOP ACTIVE")
-        self.robot_dq = np.zeros(self.robot_model.n())
-        self.integrator.set_positions(self.robot_q)
-        # Hardware will be disabled by Arduino watchdog
-    
-    def _handle_safety_violation(self):
-        """Handle safety violation."""
-        self.robot_dq = np.zeros(self.robot_model.n())
-        self.integrator.set_positions(self.robot_q)
-    
-    def _handle_control_error(self):
-        """Handle control loop error."""
-        self.robot_dq = np.zeros(self.robot_model.n())
-        self.integrator.set_positions(self.robot_q)
-    
-    def _send_to_hardware(self):
-        """Send joint positions to hardware."""
-        try:
-            for i, angle in enumerate(self.robot_q):
-                self.driver.move_to(i, angle)
-        except Exception as e:
-            print(f"Hardware communication error: {e}")
-    
-    def _go_home(self):
-        """Move robot to home position."""
-        print("Moving to home position...")
-        home_q = np.array([js.home for js in self.robot_model.joints])
+    def _pose_to_transform(self, pose) -> np.ndarray:
+        """Convert target pose to 4x4 transformation matrix."""
+        T = np.eye(4)
+        T[:3, 3] = pose.position
         
-        # Generate trajectory to home
-        from ..trajectory import Trajectory
-        traj = Trajectory()
-        q_traj, t_traj = traj.cubic_time_scaling(
-            self.robot_q, home_q, duration=2.0, dt=0.01
-        )
+        # For now, use identity rotation (just position control)
+        # TODO: Add orientation control using pose.orientation_roll
+        # This would require constructing a rotation matrix from roll angle
+        # For 5-DOF arm, we might only control position and wrist roll
         
-        # Execute trajectory
-        for q, t in zip(q_traj, t_traj):
-            for i, angle in enumerate(q):
-                self.driver.move_to(i, angle)
-            time.sleep(0.01)
+        return T
+    
+    def _clamp_workspace(self, T: np.ndarray) -> np.ndarray:
+        """Clamp target pose to workspace bounds."""
+        workspace = self.robot_config.get('workspace', {})
+        if not workspace:
+            return T
         
-        self.robot_q = home_q
-        self.robot_dq = np.zeros(self.robot_model.n())
-        print("Home position reached")
+        pos = T[:3, 3]
+        x_min = workspace.get('x_min', -np.inf)
+        x_max = workspace.get('x_max', np.inf)
+        y_min = workspace.get('y_min', -np.inf)
+        y_max = workspace.get('y_max', np.inf)
+        z_min = workspace.get('z_min', -np.inf)
+        z_max = workspace.get('z_max', np.inf)
+        
+        clamped_pos = np.array([
+            np.clip(pos[0], x_min, x_max),
+            np.clip(pos[1], y_min, y_max),
+            np.clip(pos[2], z_min, z_max)
+        ])
+        
+        T[:3, 3] = clamped_pos
+        return T
+    
+    def _execute_home(self):
+        """Execute homing sequence."""
+        print("Executing home command...")
+        if not self.use_sim:
+            self.driver.send_home_command()
+            # Wait a bit for homing to complete
+            time.sleep(2.0)
+            # Reset pose to home
+            T_home = self.kin.fk(np.array([js.home for js in self.robot_model.joints]))
+            pos_home = T_home[:3, 3]
+            self.joystick_mapper.reset_pose(pos_home, roll=0.0)
+            self.robot_q = np.array([js.home for js in self.robot_model.joints])
+            print("Home command sent")
+    
+    def _execute_park(self):
+        """Execute park command."""
+        print("Executing park command...")
+        if not self.use_sim:
+            self.driver.send_park_command()
+            print("Park command sent")
     
     def get_status(self) -> Dict[str, Any]:
         """Get current controller status."""
@@ -300,50 +367,22 @@ class TeleopController:
         return {
             'running': self.is_running,
             'uptime_seconds': uptime,
-            'packets_received': self.stats['packets_received'],
-            'packets_processed': self.stats['packets_processed'],
+            'ik_solves': self.stats['ik_solves'],
+            'ik_failures': self.stats['ik_failures'],
             'safety_violations': self.stats['safety_violations'],
-            'connection_alive': self.receiver.is_connection_alive(),
-            'emergency_active': self.emergency_handler.is_emergency_active(),
-            'robot_position': np.rad2deg(self.robot_q).tolist(),
-            'robot_velocity': np.rad2deg(self.robot_dq).tolist(),
-            'network_stats': self.receiver.get_stats().__dict__
+            'packets_sent': self.stats['packets_sent'],
+            'robot_joint_angles_deg': np.rad2deg(self.robot_q).tolist(),
+            'target_position': self.target_pose.position.tolist() if self.target_pose else None,
+            'motion_scale': self.joystick_mapper.get_motion_scale()
         }
     
-    def reset_emergency(self):
-        """Reset emergency stop condition."""
-        self.emergency_handler.reset_emergency()
-        self.safety.reset_emergency()
-        print("Emergency stop reset")
-
-
-def test_teleop_controller():
-    """Test the teleoperation controller with mock data."""
-    print("Testing TeleopController...")
+    def __enter__(self):
+        """Context manager entry."""
+        self.start()
+        return self
     
-    # Create controller with mock receiver
-    controller = TeleopController(use_mock=True)
-    
-    try:
-        # Start controller
-        controller.start()
-        
-        # Let it run for a few seconds
-        time.sleep(3.0)
-        
-        # Get status
-        status = controller.get_status()
-        print(f"Controller status: {status}")
-        
-        # Stop controller
-        controller.stop()
-        
-    except Exception as e:
-        print(f"Test error: {e}")
-        controller.stop()
-    
-    print("TeleopController test completed")
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.stop()
 
 
-if __name__ == "__main__":
-    test_teleop_controller()

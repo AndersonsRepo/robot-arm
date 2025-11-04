@@ -1,13 +1,24 @@
 hardware:
-  arduino:
+  esp32:
     baud_rate: 115200
-    timeout: 0.25
+    timeout: 0.3  # 300ms timeout for failsafe
     default_port: "/dev/ttyUSB0"
     
 servos:
   num_joints: 5
-  pins: [3, 5, 6, 9, 10]
-  pwm_us_min: [500, 500, 500, 500, 500]
-  pwm_us_max: [2500, 2500, 2500, 2500, 2500]
-  rad_min: [-3.1416, -1.5708, -2.3562, -2.3562, -3.1416]
+  pins: [2, 4, 5, 18, 19]  # ESP32 GPIO pins for servos (LEDC channels)
+  pwm_us_min: [500, 500, 500, 500, 500]  # Minimum pulse width (microseconds)
+  pwm_us_max: [2500, 2500, 2500, 2500, 2500]  # Maximum pulse width (microseconds)
+  rad_min: [-3.1416, -1.5708, -2.3562, -2.3562, -3.1416]  # Joint limits (radians)
   rad_max: [3.1416, 1.5708, 2.3562, 2.3562, 3.1416]
+  
+  # Gripper servo (6th servo)
+  gripper_pin: 21  # ESP32 GPIO pin for gripper
+  gripper_pwm_us_min: 500
+  gripper_pwm_us_max: 2500
+    
+limit_switches:
+  pins: [22, 23, 25, 26, 27]  # ESP32 GPIO pins for limit switches (INPUT_PULLUP)
+  active_low: true  # Pull-up resistors, active when pulled LOW
+  homing_backoff_deg: 5.0  # Degrees to back off after homing
+  homing_speed_deg_per_sec: 30.0  # Speed for homing motion (deg/s)
